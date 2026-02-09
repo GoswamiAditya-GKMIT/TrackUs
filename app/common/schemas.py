@@ -14,7 +14,6 @@ class BaseSchema(BaseModel):
         populate_by_name=True
     )
 
-
 class BaseResponseSchema(BaseSchema):
     
     id: uuid.UUID
@@ -22,17 +21,3 @@ class BaseResponseSchema(BaseSchema):
     updated_at: datetime
 
 
-class PaginationParams(BaseModel):
-    
-    skip: int = 0
-    limit: int = 100
-    
-    model_config = ConfigDict(frozen=True)
-
-
-class PaginatedResponse(BaseModel):
-    
-    total: int
-    skip: int
-    limit: int
-    items: list
