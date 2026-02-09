@@ -23,15 +23,3 @@ class PaginatedResponse(SuccessResponse[List[DataT]]):
     limit: int = Field(..., description="Maximum number of items")
 
 
-class ErrorDetail(BaseModel):
-    """Error detail information."""
-    
-    details: Optional[Any] = Field(None, description="Error details")
-
-
-class ErrorResponse(BaseModel):
-    """Standard error response wrapper."""
-    
-    status: str = Field(default="error", description="Response status")
-    message: str = Field(..., description="Error code/type")
-    error: ErrorDetail = Field(..., description="Error details")
