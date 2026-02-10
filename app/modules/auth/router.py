@@ -6,16 +6,20 @@ from fastapi.security import HTTPAuthorizationCredentials
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import get_db
+from app.core.redis import get_redis
 from app.modules.auth.schema import (
     LoginRequest,
     TokenResponse,
-    RefreshTokenRequest
+    RefreshTokenRequest,
+    EmailVerificationRequest,
+    ResendVerificationRequest
 )
 from app.modules.auth.service import AuthService
 from app.modules.users.model import User
 from app.dependencies.auth import get_current_user, security
 from app.common.response_utils import success_response
 from app.common.responses import SuccessResponse
+from fastapi import BackgroundTasks
 from app.core.exceptions import AuthenticationException
 from datetime import datetime, timezone
 from app.core.security import decode_access_token
@@ -73,11 +77,12 @@ async def refresh_token(
     summary="Verify user email"
 )
 async def verify_email(
-    token: str,
-    db: AsyncSession = Depends(get_db)
+    verification_data: EmailVerificationRequest,
+    db: AsyncSession = Depends(get_db),
+    redis_client = Depends(get_redis)
 ):
 
-    user = await UserService.verify_user_email(db, token)
+    user = await UserService.verify_user_email(db, redis_client, verification_data.token)
     return success_response(
         message="Email verified successfully. You can login now.",
         data={
@@ -90,6 +95,27 @@ async def verify_email(
             "is_active": user.is_active,
             "is_email_verified": user.is_email_verified,
             "created_at": user.created_at.isoformat()
+        }
+    )
+
+
+@router.post(
+    "/email-verification/resend",
+    response_model=SuccessResponse[dict],
+    summary="Resend email verification link"
+)
+async def resend_verification(
+    resend_data: ResendVerificationRequest,
+    background_tasks: BackgroundTasks,
+    db: AsyncSession = Depends(get_db)
+):
+    
+    user = await UserService.resend_verification_email(db, resend_data.email, background_tasks)
+    
+    return success_response(
+        message="Verification email sent successfully.",
+        data={
+            "message": "Please check your email for the verification link."
         }
     )
 

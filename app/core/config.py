@@ -28,6 +28,19 @@ class Settings(BaseSettings):
     SMTP_FROM_NAME: str
     SMTP_TLS: bool
     EMAIL_VERIFICATION_TOKEN_EXPIRE_HOURS: int
+    EMAIL_VERIFICATION_RESEND_COOLDOWN_SECONDS: int = 60
+    
+    # Redis Settings
+    REDIS_HOST: str
+    REDIS_PORT: int
+    REDIS_PASSWORD: str
+    REDIS_DB: int
+    
+    @property
+    def redis_url(self) -> str:
+        if self.REDIS_PASSWORD:
+            return f"redis://:{self.REDIS_PASSWORD}@{self.REDIS_HOST}:{self.REDIS_PORT}/{self.REDIS_DB}"
+        return f"redis://{self.REDIS_HOST}:{self.REDIS_PORT}/{self.REDIS_DB}"
     
     CORS_ORIGINS: str
     

@@ -13,7 +13,7 @@ from app.modules.users.schema import UserCreate, UserUpdate
 from app.modules.users.tasks import send_verification_email
 from app.modules.tenants.service import TenantService
 from app.core.security import hash_password
-from app.core.email import verify_email_token
+from app.core.redis import get_redis
 from app.core.exceptions import (
     NotFoundException,
     PermissionDeniedException,
@@ -90,11 +90,16 @@ class UserService:
         await db.commit()
         await db.refresh(user)
         
-        # Send verification email in background
+        from app.modules.auth.service import AuthService
+        
+        redis_client = await get_redis()
+        token = await AuthService.generate_and_store_token(redis_client, user.email)
+        
         background_tasks.add_task(
             send_verification_email,
             email=user.email,
-            first_name=user.first_name
+            first_name=user.first_name,
+            token=token
         )
         
         return user
@@ -102,14 +107,17 @@ class UserService:
     @staticmethod
     async def verify_user_email(
         db: AsyncSession,
+        redis_client,
         token: str
     ) -> User:
 
-        # Verify token and extract email
-        email = verify_email_token(token)
+        from app.modules.auth.service import AuthService
+        
+        # Validate and consume token (returns email if valid)
+        email = await AuthService.consume_token(redis_client, token)
+        
         if not email:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
+            raise BadRequestException(
                 detail="Invalid or expired verification token"
             )
         
@@ -241,11 +249,52 @@ class UserService:
         return user
     
     @staticmethod
+    async def resend_verification_email(
+        db: AsyncSession,
+        email: str,
+        background_tasks: BackgroundTasks
+    ) -> User:
+        """
+        Resend verification email to user.
+        Automatically invalidates any old tokens when generating new one.
+        """
+        user = await UserService.get_user_by_email(db, email)
+        
+        if not user:
+            raise NotFoundException(detail="User not found")
+        
+        if user.is_email_verified:
+            raise BadRequestException(detail="Email already verified")
+        
+        from app.modules.auth.service import AuthService
+        
+        redis_client = await get_redis()
+        token = await AuthService.generate_and_store_token(redis_client, email)
+
+        # Send verification email (this will automatically invalidate old tokens in Redis)
+        background_tasks.add_task(
+            send_verification_email,
+            email=user.email,
+            first_name=user.first_name,
+            token=token
+        )
+        
+        return user
+    
+    @staticmethod
     async def delete_user(
         db: AsyncSession,
+        redis_client,
         user: User, 
         current_user: User 
     ) -> None:
+        from app.modules.auth.service import AuthService
+
+        # Invalidate any pending verification tokens
+        try:
+            await AuthService.invalidate_user_tokens(redis_client, user.email)
+        except Exception:
+            pass
 
         user.is_active = False
         user.soft_delete()

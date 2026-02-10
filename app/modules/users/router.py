@@ -8,6 +8,7 @@ from fastapi import APIRouter, Depends, status, BackgroundTasks, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import get_db
+from app.core.redis import get_redis
 from app.modules.users.schema import (
     UserCreate,
     UserUpdate
@@ -44,7 +45,6 @@ async def create_user(
     current_user: User = Depends(require_admin)
 ):  
     await UserService.create_user(db, user_data, current_user, background_tasks)
-    
     return success_response(
         message="User created successfully. Verification link sent to email.",
         data=None
@@ -178,8 +178,9 @@ async def update_user(
 )
 async def delete_user(
     db: AsyncSession = Depends(get_db),
+    redis_client = Depends(get_redis),
     user: User = Depends(TargetUserValidator(action="delete")),
     current_user: User = Depends(get_current_user)
 ):
-    await UserService.delete_user(db, user, current_user)
+    await UserService.delete_user(db, redis_client, user, current_user)
     return Response(status_code=status.HTTP_204_NO_CONTENT)

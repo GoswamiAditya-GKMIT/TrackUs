@@ -24,5 +24,15 @@ class RefreshTokenRequest(BaseSchema):
     refresh_token: str
 
 
+class EmailVerificationRequest(BaseSchema):
+    
+    token: str = Field(..., min_length=1, description="Email verification token")
+
+
+class ResendVerificationRequest(BaseSchema):
+    
+    email: EmailStr = Field(..., description="User's email address")
+
+
 class CurrentUser(UserResponse):
     pass
