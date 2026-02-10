@@ -44,7 +44,16 @@ async def create_user(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_admin)
 ):  
-    await UserService.create_user(db, user_data, current_user, background_tasks)
+    user, token = await UserService.create_user(db, user_data, current_user)
+    
+    from app.modules.users.tasks import send_verification_email
+    background_tasks.add_task(
+        send_verification_email,
+        email=user.email,
+        first_name=user.first_name,
+        token=token
+    )
+    
     return success_response(
         message="User created successfully. Verification link sent to email.",
         data=None

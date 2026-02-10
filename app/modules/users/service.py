@@ -6,8 +6,7 @@ from typing import Optional
 
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
-from fastapi import HTTPException, status, BackgroundTasks
-
+from fastapi import HTTPException, status
 from app.modules.users.model import User
 from app.modules.users.schema import UserCreate, UserUpdate
 from app.modules.users.tasks import send_verification_email
@@ -28,9 +27,8 @@ class UserService:
     async def create_user(
         db: AsyncSession,
         user_data: UserCreate,
-        creator: User, 
-        background_tasks: BackgroundTasks
-    ) -> User:
+        creator: User
+    ) -> tuple[User, str]:
         """
         Create a new user.
         Validation of who can create whom is done in Router/Dependencies.
@@ -95,14 +93,7 @@ class UserService:
         redis_client = await get_redis()
         token = await AuthService.generate_and_store_token(redis_client, user.email)
         
-        background_tasks.add_task(
-            send_verification_email,
-            email=user.email,
-            first_name=user.first_name,
-            token=token
-        )
-        
-        return user
+        return user, token
     
     @staticmethod
     async def verify_user_email(
@@ -251,9 +242,8 @@ class UserService:
     @staticmethod
     async def resend_verification_email(
         db: AsyncSession,
-        email: str,
-        background_tasks: BackgroundTasks
-    ) -> User:
+        email: str
+    ) -> tuple[User, str]:
         """
         Resend verification email to user.
         Automatically invalidates any old tokens when generating new one.
@@ -271,15 +261,8 @@ class UserService:
         redis_client = await get_redis()
         token = await AuthService.generate_and_store_token(redis_client, email)
 
-        # Send verification email (this will automatically invalidate old tokens in Redis)
-        background_tasks.add_task(
-            send_verification_email,
-            email=user.email,
-            first_name=user.first_name,
-            token=token
-        )
         
-        return user
+        return user, token
     
     @staticmethod
     async def delete_user(

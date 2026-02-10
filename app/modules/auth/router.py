@@ -12,7 +12,9 @@ from app.modules.auth.schema import (
     TokenResponse,
     RefreshTokenRequest,
     EmailVerificationRequest,
-    ResendVerificationRequest
+    ResendVerificationRequest,
+    ForgotPasswordRequest,
+    ResetPasswordRequest
 )
 from app.modules.auth.service import AuthService
 from app.modules.users.model import User
@@ -110,7 +112,15 @@ async def resend_verification(
     db: AsyncSession = Depends(get_db)
 ):
     
-    user = await UserService.resend_verification_email(db, resend_data.email, background_tasks)
+    user, token = await UserService.resend_verification_email(db, resend_data.email)
+    
+    from app.modules.users.tasks import send_verification_email
+    background_tasks.add_task(
+        send_verification_email,
+        email=user.email,
+        first_name=user.first_name,
+        token=token
+    )
     
     return success_response(
         message="Verification email sent successfully.",
@@ -160,4 +170,82 @@ async def logout(
         data={
             "message": "Your session has been terminated"
         }
+    )
+
+
+@router.post(
+    "/forgot-password",
+    response_model=SuccessResponse[dict],
+    summary="Request password reset"
+)
+async def forgot_password(
+    request_data: ForgotPasswordRequest,
+    background_tasks: BackgroundTasks,
+    db: AsyncSession = Depends(get_db),
+    redis_client = Depends(get_redis)
+):
+    """
+    Generates a token and sends an email with the reset link.
+    """
+    user = await UserService.get_user_by_email(db, request_data.email)
+    
+    if not user:
+        # Return success even if email not found to prevent email enumeration
+        return success_response(
+            message="If the email exists, a password reset link has been sent.",
+            data={"message": "Check your email inbox."}
+        )
+
+    if not user.is_active:
+        # Optionally handle inactive users differently or just ignore
+        return success_response(
+            message="If the email exists, a password reset link has been sent.",
+            data={"message": "Check your email inbox."}
+        )
+        
+    # Generate reset token
+    token = await AuthService.generate_and_store_token(
+        redis_client, 
+        user.email, 
+        token_type=AuthService.PASSWORD_RESET_PREFIX
+    )
+    
+    # Send email in background
+    from app.modules.users.tasks import send_reset_password_email
+    background_tasks.add_task(
+        send_reset_password_email,
+        email=user.email,
+        first_name=user.first_name,
+        token=token
+    )
+    
+    return success_response(
+        message="If the email exists, a password reset link has been sent.",
+        data={"message": "Check your email inbox."}
+    )
+
+
+@router.post(
+    "/reset-password",
+    response_model=SuccessResponse[dict],
+    summary="Reset password"
+)
+async def reset_password(
+    reset_data: ResetPasswordRequest,
+    db: AsyncSession = Depends(get_db),
+    redis_client = Depends(get_redis)
+):
+    """
+    Reset user password using a valid token.
+    """
+    await AuthService.reset_password(
+        db, 
+        redis_client, 
+        reset_data.token, 
+        reset_data.new_password
+    )
+    
+    return success_response(
+        message="Password has been reset successfully.",
+        data={"message": "You can now login with your new password."}
     )
