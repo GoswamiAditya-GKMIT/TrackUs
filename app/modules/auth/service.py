@@ -20,6 +20,8 @@ from app.core.security import (
 from app.core.exceptions import AuthenticationException, EmailNotVerifiedException
 from app.core.config import settings
 import uuid
+from app.modules.auth.blacklist_service import TokenBlacklistService
+
 
 
 logger = logging.getLogger(__name__)
@@ -95,8 +97,14 @@ class AuthService:
             raise AuthenticationException(detail="Invalid or expired refresh token")
         
         user_id = payload.get("sub")
-        if not user_id:
+        jti = payload.get("jti")
+        
+        if not user_id or not jti:
             raise AuthenticationException(detail="Invalid token payload")
+        
+        # Check if refresh token is blacklisted
+        if await TokenBlacklistService.is_token_blacklisted(db, jti):
+            raise AuthenticationException(detail="Refresh token has been revoked")
         
         user = await UserService.get_user(db, uuid.UUID(user_id))
         

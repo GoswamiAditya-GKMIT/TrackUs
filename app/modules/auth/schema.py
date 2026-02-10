@@ -1,6 +1,7 @@
 """
 Authentication Pydantic schemas.
 """
+from typing import Optional
 from pydantic import EmailStr, Field, field_validator, model_validator
 
 from app.common.schemas import BaseSchema
@@ -65,3 +66,7 @@ class ResetPasswordRequest(BaseSchema):
 
 class CurrentUser(UserResponse):
     pass
+
+
+class LogoutRequest(BaseSchema):
+    refresh_token: Optional[str] = Field(None, description="Optional refresh token to blacklist")

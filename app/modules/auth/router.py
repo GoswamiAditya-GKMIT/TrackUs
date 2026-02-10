@@ -14,7 +14,8 @@ from app.modules.auth.schema import (
     EmailVerificationRequest,
     ResendVerificationRequest,
     ForgotPasswordRequest,
-    ResetPasswordRequest
+    ResetPasswordRequest,
+    LogoutRequest
 )
 from app.modules.auth.service import AuthService
 from app.modules.users.model import User
@@ -24,7 +25,7 @@ from app.common.responses import SuccessResponse
 from fastapi import BackgroundTasks
 from app.core.exceptions import AuthenticationException
 from datetime import datetime, timezone
-from app.core.security import decode_access_token
+from app.core.security import decode_access_token, decode_refresh_token
 from app.modules.auth.blacklist_service import TokenBlacklistService
 from app.modules.users.service import UserService
 
@@ -136,6 +137,7 @@ async def resend_verification(
     summary="Logout user"
 )
 async def logout(
+    logout_data: LogoutRequest = None,
     credentials: HTTPAuthorizationCredentials = Depends(security),
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
@@ -164,6 +166,23 @@ async def logout(
         expires_at=expires_at,
         reason="logout"
     )
+    
+    # Also blacklist refresh token if provided
+    if logout_data and logout_data.refresh_token:
+        refresh_payload = decode_refresh_token(logout_data.refresh_token)
+        if refresh_payload:
+            r_jti = refresh_payload.get("jti")
+            r_exp = refresh_payload.get("exp")
+            if r_jti and r_exp:
+                r_expires_at = datetime.fromtimestamp(r_exp, tz=timezone.utc)
+                await TokenBlacklistService.blacklist_token(
+                    db=db,
+                    jti=r_jti,
+                    user_id=current_user.id,
+                    token_type="refresh",
+                    expires_at=r_expires_at,
+                    reason="logout"
+                )
     
     return success_response(
         message="Logged out successfully",
