@@ -12,6 +12,7 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 from app.core.config import settings
 from app.db.base import import_models
 from app.db.session import async_engine
+from app.core.redis import init_redis, close_redis
 
 from app.core.handlers import (
     http_exception_handler,
@@ -50,12 +51,14 @@ async def lifespan(app: FastAPI):
     logger.info("Starting TrackUs application...")
     
     import_models()
+    await init_redis()
 
     logger.info("Application startup complete")
 
     yield
     
     logger.info("Shutting down TrackUs application...")
+    await close_redis()
     await async_engine.dispose()
     logger.info("Application shutdown complete")
 

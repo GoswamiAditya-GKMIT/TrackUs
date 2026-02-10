@@ -17,6 +17,7 @@ dependencies = [
     "python-multipart>=0.0.20",
     "python-dotenv>=1.0.1",
     "aiosmtplib>=5.1.0",
+    "redis>=5.0.0",
 ]
 
 [build-system]

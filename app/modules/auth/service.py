@@ -1,8 +1,12 @@
 """
 Authentication service layer - business logic for authentication.
 """
-
+import logging
+import secrets
+import base64
+from typing import Optional
 from sqlalchemy.ext.asyncio import AsyncSession
+import redis.asyncio as redis
 
 from app.modules.users.model import User
 from app.modules.users.service import UserService
@@ -14,12 +18,19 @@ from app.core.security import (
     decode_refresh_token
 )
 from app.core.exceptions import AuthenticationException, EmailNotVerifiedException
+from app.core.config import settings
 import uuid
 
+
+logger = logging.getLogger(__name__)
 
 
 class AuthService:
     """Service class for authentication operations."""
+    
+    # Verification token constants
+    TOKEN_PREFIX = "email_verification"
+    TOKEN_LENGTH = 32  # 32 bytes = 64 hex characters
     
     @staticmethod
     async def authenticate_user(
@@ -102,4 +113,110 @@ class AuthService:
             access_token=access_token,
             refresh_token=refresh_token  
         )
+    
+    # Email Verification Token Methods
+    
+    @staticmethod
+    def _get_redis_key(email: str) -> str:
+        """Generate Redis key for email verification token."""
+        return f"{AuthService.TOKEN_PREFIX}:{email}"
+    
+    @staticmethod
+    def _generate_token() -> str:
+        """Generate a cryptographically secure random token."""
+        return secrets.token_urlsafe(AuthService.TOKEN_LENGTH)
+    
+    @staticmethod
+    async def generate_and_store_token(redis_client: redis.Redis, email: str) -> str:
+        """
+        Generate a new verification token for the email and store it in Redis.
+        The returned token is a composite of base64(email) + . + random_secret.
+        """
+        # Validate cooldown
+        cooldown_key = f"{AuthService.TOKEN_PREFIX}_cooldown:{email}"
+        if await redis_client.get(cooldown_key):
+            from app.core.exceptions import RateLimitException
+            raise RateLimitException(
+                detail=f"Please wait {settings.EMAIL_VERIFICATION_RESEND_COOLDOWN_SECONDS} seconds before requesting another email."
+            )
+
+        secret_token = AuthService._generate_token()
+        
+        # Store in Redis with TTL
+        redis_key = AuthService._get_redis_key(email)
+        ttl_seconds = settings.EMAIL_VERIFICATION_TOKEN_EXPIRE_HOURS * 3600
+        
+        await redis_client.set(redis_key, secret_token, ex=ttl_seconds)
+        
+        # Set cooldown
+        await redis_client.set(
+            cooldown_key, 
+            "1", 
+            ex=settings.EMAIL_VERIFICATION_RESEND_COOLDOWN_SECONDS
+        )
+        
+        # Create composite token: base64(email).secret_token
+        email_b64 = base64.urlsafe_b64encode(email.encode()).decode()
+        composite_token = f"{email_b64}.{secret_token}"
+        
+        logger.info(f"Generated verification token for email (masked)")
+        
+        return composite_token
+    
+    @staticmethod
+    async def validate_token(redis_client: redis.Redis, token: str) -> Optional[str]:
+        """
+        Validate a verification token.
+        Returns the email if valid, None otherwise.
+        """
+        try:
+            if "." not in token:
+                return None
+                
+            email_b64, secret_token = token.split(".", 1)
+            email = base64.urlsafe_b64decode(email_b64.encode()).decode()
+            
+            redis_key = AuthService._get_redis_key(email)
+            stored_token = await redis_client.get(redis_key)
+            
+            if not stored_token:
+                logger.warning(f"No token found for email verification")
+                return None
+            
+            if secrets.compare_digest(stored_token, secret_token):
+                return email
+            return None
+            
+        except Exception:
+            return None
+
+    @staticmethod
+    async def consume_token(redis_client: redis.Redis, token: str) -> Optional[str]:
+        """
+        Validate and consume (delete) a verification token.
+        Returns the email if valid and consumed, None otherwise.
+        """
+        email = await AuthService.validate_token(redis_client, token)
+        
+        if not email:
+            return None
+        
+        # Delete the token from Redis
+        redis_key = AuthService._get_redis_key(email)
+        await redis_client.delete(redis_key)
+        
+        logger.info(f"Consumed verification token for email")
+        
+        return email
+    
+    @staticmethod
+    async def invalidate_user_tokens(redis_client: redis.Redis, email: str) -> None:
+        """
+        Invalidate all verification tokens for a user.
+
+        """
+        redis_key = AuthService._get_redis_key(email)
+        await redis_client.delete(redis_key)
+        
+        logger.info(f"Invalidated all verification tokens for email")
 

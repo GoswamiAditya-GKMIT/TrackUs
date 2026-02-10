@@ -7,47 +7,11 @@ from typing import Optional
 import aiosmtplib
 from email.message import EmailMessage
 
-from jose import JWTError, jwt
-
 from app.core.config import settings
 
 logger = logging.getLogger(__name__)
 
 
-def generate_verification_token(email: str) -> str:
-    """
-    Generate a JWT token for email verification.
-    """
-    expire = datetime.now(timezone.utc) + timedelta(
-        hours=settings.EMAIL_VERIFICATION_TOKEN_EXPIRE_HOURS
-    )
-    to_encode = {
-        "sub": email,
-        "exp": expire,
-        "type": "email_verification"
-    }
-    token = jwt.encode(
-        to_encode,
-        settings.JWT_SECRET_KEY,
-        algorithm=settings.JWT_ALGORITHM
-    )
-    return token
-
-
-def verify_email_token(token: str) -> Optional[str]:
-
-    try:
-        payload = jwt.decode(
-            token,
-            settings.JWT_SECRET_KEY,
-            algorithms=[settings.JWT_ALGORITHM]
-        )
-        if payload.get("type") != "email_verification":
-            return None
-        email: str = payload.get("sub")
-        return email
-    except JWTError:
-        return None
 
 
 
