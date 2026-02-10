@@ -44,7 +44,6 @@ async def create_user(
     current_user: User = Depends(require_admin)
 ):  
     await UserService.create_user(db, user_data, current_user, background_tasks)
-    
     return success_response(
         message="User created successfully. Verification link sent to email.",
         data=None

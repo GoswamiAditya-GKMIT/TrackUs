@@ -80,14 +80,16 @@ async def send_email(
         logger.error(f"Failed to send email: {str(e)}")
 
 
-def create_verification_email_body(verification_url: str, user_name: str) -> str:
+def create_verification_email_body(token: str, user_name: str, verification_url: str) -> str:
 
     return f"""
         Hello {user_name},
 
-        Welcome to TrackUs! Please verify your email address by clicking the link below:
+        Welcome to TrackUs! Please verify your email address using the verification link below:
 
+        
         {verification_url}
+        
 
         This link will expire in {settings.EMAIL_VERIFICATION_TOKEN_EXPIRE_HOURS} hours.
 

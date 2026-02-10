@@ -9,7 +9,8 @@ from app.db.session import get_db
 from app.modules.auth.schema import (
     LoginRequest,
     TokenResponse,
-    RefreshTokenRequest
+    RefreshTokenRequest,
+    EmailVerificationRequest
 )
 from app.modules.auth.service import AuthService
 from app.modules.users.model import User
@@ -73,11 +74,11 @@ async def refresh_token(
     summary="Verify user email"
 )
 async def verify_email(
-    token: str,
+    verification_data: EmailVerificationRequest,
     db: AsyncSession = Depends(get_db)
 ):
 
-    user = await UserService.verify_user_email(db, token)
+    user = await UserService.verify_user_email(db, verification_data.token)
     return success_response(
         message="Email verified successfully. You can login now.",
         data={
