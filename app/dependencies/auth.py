@@ -3,7 +3,7 @@ Authentication dependencies for route protection.
 """
 import uuid
 
-from fastapi import Depends
+from fastapi import Depends, HTTPException
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -11,11 +11,15 @@ from app.db.session import get_db
 from app.modules.users.model import User
 from app.core.security import decode_access_token
 from app.core.exceptions import AuthenticationException
+from app.common.enums import UserRole
+from app.core.exceptions import PermissionDeniedException
+
 
 # Security scheme for Swagger UI - HTTPBearer for JWT tokens
 security = HTTPBearer(
     scheme_name="Bearer",
-    description="Enter your JWT access token"
+    description="Enter your JWT access token",
+    auto_error = False
 )
 
 
@@ -28,7 +32,10 @@ async def get_current_user(
     """
     from app.modules.users.service import UserService
     from app.modules.auth.blacklist_service import TokenBlacklistService
-    
+
+    if not credentials:
+        raise AuthenticationException(detail="No token provided")
+
     token = credentials.credentials
     
     payload = decode_access_token(token)
@@ -61,24 +68,16 @@ async def get_current_user(
     return user
 
 
-async def get_current_active_user(
-    current_user: User = Depends(get_current_user)
-) -> User:
-    return current_user
-
-
 async def require_super_admin(
     current_user: User = Depends(get_current_user)
 ) -> User:
     """
     Require that the current user is a SUPER_ADMIN.
     """
-
-    from app.core.permissions import (
-        require_super_admin as core_require_super_admin
-    )
-    
-    core_require_super_admin(current_user)
+    if current_user.role != UserRole.SUPER_ADMIN:
+        raise PermissionDeniedException(
+            detail="Only super admins can perform this action"
+        )
     return current_user
 
 
@@ -86,10 +85,23 @@ async def require_tenant_admin(
     current_user: User = Depends(get_current_user)
 ) -> User:
     """
-    Require that the current user is a TENANT_ADMIN or SUPER_ADMIN.
+    Require that the current user is a TENANT_ADMIN.
     """
-    
-    from app.core.permissions import require_tenant_admin as core_require_tenant_admin
-    
-    core_require_tenant_admin(current_user)
+    if current_user.role != UserRole.TENANT_ADMIN:
+        raise PermissionDeniedException(
+            detail="Only tenant admins can perform this action"
+        )
+    return current_user
+
+
+async def require_admin(
+    current_user: User = Depends(get_current_user)
+) -> User:
+    """
+    Require that the current user is either a SUPER_ADMIN or TENANT_ADMIN.
+    """
+    if current_user.role not in [UserRole.SUPER_ADMIN, UserRole.TENANT_ADMIN]:
+        raise PermissionDeniedException(
+            detail="Only admins can perform this action"
+        )
     return current_user
