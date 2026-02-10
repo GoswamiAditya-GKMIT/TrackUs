@@ -62,3 +62,23 @@ def create_verification_email_body(token: str, user_name: str, verification_url:
         Best regards,
         The TrackUs Team
         """
+
+
+def create_reset_password_email_body(token: str, user_name: str, reset_url: str) -> str:
+    """Create email body for password reset."""
+    return f"""
+        Hello {user_name},
+
+        You have requested to reset your password for TrackUs.
+        
+        Please click the link below to reset your password:
+
+        {reset_url}
+
+        This link will expire in {settings.PASSWORD_RESET_TOKEN_EXPIRE_HOURS} hours.
+
+        If you did not request a password reset, please ignore this email.
+        
+        Best regards,
+        The TrackUs Team
+        """

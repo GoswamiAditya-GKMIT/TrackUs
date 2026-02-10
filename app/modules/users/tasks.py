@@ -30,3 +30,29 @@ async def send_verification_email(
         logger.info("Verification email sent")
     except Exception as e:
         logger.error(f"Failed to send verification email {str(e)}")
+
+
+async def send_reset_password_email(
+    email: str,
+    first_name: str,
+    token: str,
+    base_url: str = "http://localhost:3000"
+) -> None:
+
+    try:
+        from app.core.email import send_email, create_reset_password_email_body
+        
+        reset_url = f"{base_url}/auth/reset-password?token={token}"
+        
+        body = create_reset_password_email_body(token, first_name, reset_url)
+        
+        # Send email
+        await send_email(
+            to_email=email,
+            subject="Reset your TrackUs password",
+            body=body
+        )
+        
+        logger.info("Password reset email sent")
+    except Exception as e:
+        logger.error(f"Failed to send password reset email {str(e)}")

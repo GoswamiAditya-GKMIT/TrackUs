@@ -29,6 +29,7 @@ class Settings(BaseSettings):
     SMTP_TLS: bool
     EMAIL_VERIFICATION_TOKEN_EXPIRE_HOURS: int
     EMAIL_VERIFICATION_RESEND_COOLDOWN_SECONDS: int = 60
+    PASSWORD_RESET_TOKEN_EXPIRE_HOURS: int = 1
     
     # Redis Settings
     REDIS_HOST: str
