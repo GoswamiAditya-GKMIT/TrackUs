@@ -37,6 +37,7 @@ from app.core.exceptions import (
 from app.modules.auth.router import router as auth_router
 from app.modules.tenants.router import router as tenants_router
 from app.modules.users.router import router as users_router
+from app.modules.groups.router import router as groups_router
 
 logging.basicConfig(
     level=logging.INFO,
@@ -96,6 +97,7 @@ app.add_exception_handler(Exception, general_exception_handler)
 app.include_router(auth_router, prefix="/api/v1")
 app.include_router(tenants_router, prefix="/api/v1")
 app.include_router(users_router, prefix="/api/v1")
+app.include_router(groups_router, prefix="/api/v1")
 
 
 @app.get("/health", tags=["health"])
