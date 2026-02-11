@@ -11,6 +11,9 @@ from app.common.schemas import BaseSchema, BaseResponseSchema
 from app.common.enums import UserRole
 
 
+from app.modules.tenants.schema import TenantResponse
+
+
 class UserCreate(BaseSchema):
     
     email: EmailStr
@@ -45,9 +48,8 @@ class UserUpdate(BaseSchema):
     is_active: Optional[bool] = None
 
 
-class UserResponse(BaseResponseSchema):
-    
-    tenant_id: Optional[uuid.UUID]
+class UserBaseResponse(BaseResponseSchema):
+    """Base user response schema with common fields."""
     email: str
     first_name: str
     last_name: str
@@ -59,3 +61,18 @@ class UserResponse(BaseResponseSchema):
     @property
     def full_name(self) -> str:
         return f"{self.first_name} {self.last_name}"
+
+
+class UserResponse(UserBaseResponse):
+    """Standard user response with tenant ID."""
+    tenant_id: Optional[uuid.UUID]
+
+
+class UserListResponse(UserResponse):
+    """User response for list view, includes tenant name."""
+    tenant_name: Optional[str] = None
+
+
+class UserDetailResponse(UserBaseResponse):
+    """User response for detail view, includes nested tenant data but excludes tenant_id."""
+    tenant: Optional[TenantResponse] = None

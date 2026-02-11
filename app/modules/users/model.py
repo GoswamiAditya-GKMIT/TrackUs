@@ -79,3 +79,8 @@ class User(Base, UUIDMixin, TimestampMixin, SoftDeleteMixin):
     def full_name(self) -> str:
         """Get user's full name."""
         return f"{self.first_name} {self.last_name}"
+    
+    @property
+    def tenant_name(self) -> Optional[str]:
+        """Get tenant name if tenant exists."""
+        return self.tenant.name if self.tenant else None
