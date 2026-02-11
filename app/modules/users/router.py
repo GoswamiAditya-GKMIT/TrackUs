@@ -11,7 +11,10 @@ from app.db.session import get_db
 from app.core.redis import get_redis
 from app.modules.users.schema import (
     UserCreate,
-    UserUpdate
+    UserUpdate,
+    UserResponse,
+    UserListResponse,
+    UserDetailResponse
 )
 from app.modules.users.service import UserService
 from app.modules.users.model import User
@@ -23,7 +26,6 @@ from app.common.enums import UserRole
 from app.core.exceptions import PermissionDeniedException
 from app.common.response_utils import success_response, paginated_response
 from app.common.responses import SuccessResponse, PaginatedResponse
-from app.modules.users.schema import UserResponse
 from fastapi import Response
 from app.dependencies.common import PaginationParams
 
@@ -82,7 +84,7 @@ async def get_current_user_info(
 
 @router.get(
     "/{user_id}",
-    response_model=SuccessResponse[UserResponse],
+    response_model=SuccessResponse[UserDetailResponse],
     summary="Get user by ID"
 )
 async def get_user(
@@ -90,26 +92,13 @@ async def get_user(
 ):
     return success_response(
         message="User retrieved successfully",
-        data={
-            "id": str(user.id),
-            "tenant_id": str(user.tenant_id) if user.tenant_id else None,
-            "email": user.email,
-            "first_name": user.first_name,
-            "last_name": user.last_name,
-            "role": user.role.value,
-            "is_active": user.is_active,
-            "is_email_verified": user.is_email_verified,
-            "created_at": user.created_at.isoformat(),
-            "updated_at": user.updated_at.isoformat() if user.updated_at else None,
-            "deleted_at": user.deleted_at.isoformat() if user.deleted_at else None
-        }
+        data=UserDetailResponse.model_validate(user)
     )
-
 
 
 @router.get(
     "/",
-    response_model=PaginatedResponse[UserResponse],
+    response_model=PaginatedResponse[UserListResponse],
     summary="List users"
 )
 async def list_users(
@@ -117,7 +106,7 @@ async def list_users(
     is_active: Optional[bool] = Query(None, description="Filter by active status"),
     deleted: Optional[bool] = Query(None, description="Filter by deleted status"),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_admin)
+    current_user: User = Depends(get_current_user)
 ):
     users, total = await UserService.list_users(
         db, current_user, pagination.skip, pagination.limit, is_active, deleted
@@ -125,23 +114,7 @@ async def list_users(
     
     return paginated_response(
         message="Users retrieved successfully",
-        data=[
-            {
-                "id": str(u.id),
-                "tenant_id": str(u.tenant_id) if u.tenant_id else None,
-                "email": u.email,
-                "first_name": u.first_name,
-                "last_name": u.last_name,
-                "role": u.role.value,
-                "is_active": u.is_active,
-                "is_email_verified": u.is_email_verified,
-                "created_at": u.created_at.isoformat(),
-                "created_at": u.created_at.isoformat(),
-                "updated_at": u.updated_at.isoformat() if u.updated_at else None,
-                "deleted_at": u.deleted_at.isoformat() if u.deleted_at else None
-            }
-            for u in users
-        ],
+        data=[UserListResponse.model_validate(u) for u in users],
         total=total,
         skip=pagination.skip,
         limit=pagination.limit
@@ -163,20 +136,7 @@ async def update_user(
     
     return success_response(
         message="User updated successfully",
-        data={
-            "id": str(updated_user.id),
-            "tenant_id": str(updated_user.tenant_id) if updated_user.tenant_id else None,
-            "email": updated_user.email,
-            "first_name": updated_user.first_name,
-            "last_name": updated_user.last_name,
-            "role": updated_user.role.value,
-            "is_active": updated_user.is_active,
-            "is_email_verified": updated_user.is_email_verified,
-            "created_at": updated_user.created_at.isoformat(),
-            "created_at": updated_user.created_at.isoformat(),
-            "updated_at": updated_user.updated_at.isoformat(),
-            "deleted_at": updated_user.deleted_at.isoformat() if updated_user.deleted_at else None
-        }
+        data=UserResponse.model_validate(updated_user)
     )
 
 

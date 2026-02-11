@@ -5,6 +5,7 @@ import uuid
 from typing import Optional
 
 from sqlalchemy import select, func
+from sqlalchemy.orm import selectinload
 from sqlalchemy.ext.asyncio import AsyncSession
 from fastapi import HTTPException, status
 from app.modules.users.model import User
@@ -145,7 +146,7 @@ class UserService:
         query = select(User).where(
             User.id == user_id,
             User.deleted_at.is_(None)
-        )
+        ).options(selectinload(User.tenant))
         result = await db.execute(query)
         user = result.scalar_one_or_none()
         
@@ -177,7 +178,7 @@ class UserService:
         deleted: Optional[bool] = None
     ) -> tuple[list[User], int]:
 
-        query = select(User)
+        query = select(User).options(selectinload(User.tenant))
         
         # Handle soft-delete filtering
         if deleted is True:
@@ -191,7 +192,7 @@ class UserService:
         if current_user.role == UserRole.SUPER_ADMIN:
             query = query.where(User.role == UserRole.TENANT_ADMIN)
             
-        elif current_user.role == UserRole.TENANT_ADMIN:
+        elif current_user.role in [UserRole.TENANT_ADMIN, UserRole.USER]:
             query = query.where(
                 User.tenant_id == current_user.tenant_id,
                 User.role == UserRole.USER
