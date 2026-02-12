@@ -1,5 +1,5 @@
 import logging
-from typing import Dict, List
+from typing import Dict, List, Optional
 from fastapi import WebSocket, status
 
 logger = logging.getLogger(__name__)
@@ -8,11 +8,13 @@ logger = logging.getLogger(__name__)
 class ConnectionManager:
     """
     Manages active WebSocket connections grouped by group_id and user_id.
+    Supports optional Redis Pub/Sub for cross-server broadcasting.
     """
 
-    def __init__(self):
+    def __init__(self, pubsub_manager=None):
         # Maps group_id -> {user_id: [WebSocket]}
         self.active_connections: Dict[str, Dict[str, List[WebSocket]]] = {}
+        self.pubsub = pubsub_manager  # Optional Redis Pub/Sub manager
 
     async def connect(self, websocket: WebSocket, group_id: str, user_id: str):
         """
@@ -68,6 +70,21 @@ class ConnectionManager:
     async def broadcast(self, group_id: str, message: dict):
         """
         Send a message to all connected clients in a group.
+        If Pub/Sub is enabled, publishes to Redis for cross-server distribution.
+        Otherwise, broadcasts directly to local connections.
+        """
+        if self.pubsub:
+            # Multi-server mode: publish to Redis
+            channel = f"group:{group_id}"
+            await self.pubsub.publish(channel, message)
+        else:
+            # Single-server mode: direct local broadcast
+            await self._broadcast_local(group_id, message)
+
+    async def _broadcast_local(self, group_id: str, message: dict):
+        """
+        Send a message to all local WebSocket connections in a group.
+        This is called either directly (single-server) or by Pub/Sub subscriber (multi-server).
         """
         if group_id in self.active_connections:
             for user_id, connections in list(self.active_connections[group_id].items()):
@@ -77,6 +94,7 @@ class ConnectionManager:
                     except Exception as e:
                         logger.error(f"Error broadcasting to user {user_id} in {group_id}: {e}")
                         self.disconnect(websocket, group_id, user_id)
+
 
 # Global manager instance
 manager = ConnectionManager()
