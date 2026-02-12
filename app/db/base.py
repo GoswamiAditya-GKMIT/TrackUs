@@ -15,5 +15,6 @@ def import_models():
     from app.modules.tenants.model import Tenant
     from app.modules.auth.model import TokenBlacklist
     from app.modules.groups.model import Group, GroupMember
+    from app.modules.chat.model import GroupMessage
 
 
