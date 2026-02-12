@@ -79,7 +79,7 @@ class Group(Base, UUIDMixin, TimestampMixin, SoftDeleteMixin):
             "tenant_id", 
             "name", 
             unique=True,
-            postgresql_where=(SoftDeleteMixin.deleted_at == None)
+            postgresql_where="deleted_at IS NULL"
         ),
     )
 

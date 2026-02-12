@@ -14,6 +14,7 @@ from app.modules.groups.model import Group, GroupMember
 from app.modules.groups.schema import GroupCreate, GroupUpdate, GroupMemberCreate, GroupMemberUpdate
 from app.modules.users.model import User
 from app.common.enums import GroupMemberRole, UserRole
+from app.realtime.manager import manager
 from app.core.exceptions import (
     BadRequestException,
     NotFoundException,
@@ -225,7 +226,7 @@ class MembershipService:
             and_(
                 GroupMember.group_id == group_id,
                 GroupMember.user_id == user_id,
-                GroupMember.left_at == None
+                GroupMember.left_at.is_(None)
             )
         )
         result = await db.execute(query)
@@ -274,21 +275,39 @@ class MembershipService:
         
         if target_user.tenant_id != requester.tenant_id:
             raise PermissionDeniedException(detail="Cannot add users from other tenants")
-
-        # Check if already a member
-        existing = await MembershipService.get_membership(db, group_id, member_data.user_id)
-        if existing:
-            raise BadRequestException(detail="User is already a member of this group")
-
-        membership = GroupMember(
-            group_id=group_id,
-            user_id=member_data.user_id,
-            role=member_data.role
+        
+        # Check if a membership record already exists (even if they previously left)
+        # We query directly to avoid the 'left_at is None' filter in get_membership
+        query = select(GroupMember).where(
+            and_(
+                GroupMember.group_id == group_id,
+                GroupMember.user_id == member_data.user_id
+            )
         )
-        db.add(membership)
+        result = await db.execute(query)
+        membership = result.scalar_one_or_none()
+
+        if membership:
+            if membership.left_at is None:
+                raise BadRequestException(detail="User is already a member of this group")
+            
+            # Reactivate membership
+            logger.info(f"Reactivating membership for user {member_data.user_id} in group {group_id}")
+            membership.left_at = None
+            membership.role = member_data.role
+            # Update updated_at automatically via TimestampMixin
+        else:
+            # Create new membership
+            membership = GroupMember(
+                group_id=group_id,
+                user_id=member_data.user_id,
+                role=member_data.role
+            )
+            db.add(membership)
+        
         await db.commit()
         await db.refresh(membership)
-        logger.info(f"User {member_data.user_id} added to group {group_id} by {requester.id}")
+        logger.info(f"User {member_data.user_id} added/reactivated in group {group_id} by {requester.id}")
         return membership
 
     @staticmethod
@@ -311,6 +330,10 @@ class MembershipService:
 
         membership.left_at = datetime.now(timezone.utc)
         await db.commit()
+        
+        # Proactively disconnect from chat if connected
+        await manager.disconnect_user(str(group_id), str(user_id))
+        
         logger.info(f"User {user_id} removed from group {group_id} by {requester.id}")
 
     @staticmethod
@@ -332,6 +355,10 @@ class MembershipService:
 
         membership.left_at = datetime.now(timezone.utc)
         await db.commit()
+        
+        # Proactively disconnect from chat if connected
+        await manager.disconnect_user(str(group_id), str(user.id))
+        
         logger.info(f"User {user.id} left group {group_id}")
 
     @staticmethod
