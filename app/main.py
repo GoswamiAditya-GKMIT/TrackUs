@@ -39,6 +39,8 @@ from app.modules.tenants.router import router as tenants_router
 from app.modules.users.router import router as users_router
 from app.modules.groups.router import router as groups_router
 from app.modules.chat.router import router as chat_router
+from app.realtime.pubsub import pubsub_manager
+from app.realtime.manager import manager
 from app.realtime.chat import chat_socket_handler
 
 logging.basicConfig(
@@ -48,6 +50,19 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
+async def handle_pubsub_message(channel: str, message: dict):
+    """
+    Handle incoming Pub/Sub messages and broadcast to local WebSocket connections.
+    
+    Args:
+        channel: Redis channel (e.g., "group:123")
+        message: Message dict to broadcast
+    """
+    # Extract group_id from channel name (format: "group:{group_id}")
+    group_id = channel.split(":", 1)[1] if ":" in channel else channel
+    await manager._broadcast_local(group_id, message)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
 
@@ -55,12 +70,25 @@ async def lifespan(app: FastAPI):
     
     import_models()
     await init_redis()
+    
+    # Initialize Redis Pub/Sub for WebSocket scaling
+    try:
+        await pubsub_manager.connect()
+        # Register handler for group messages
+        pubsub_manager.register_handler("group:*", handle_pubsub_message)
+        await pubsub_manager.start_subscriber()
+        logger.info("Redis Pub/Sub initialized successfully")
+        # Update manager to use Pub/Sub
+        manager.pubsub = pubsub_manager
+    except Exception as e:
+        logger.warning(f"Failed to initialize Redis Pub/Sub: {e}. Running in local-only mode.")
 
     logger.info("Application startup complete")
 
     yield
     
     logger.info("Shutting down TrackUs application...")
+    await pubsub_manager.disconnect()
     await close_redis()
     await async_engine.dispose()
     logger.info("Application shutdown complete")
