@@ -39,6 +39,7 @@ from app.modules.tenants.router import router as tenants_router
 from app.modules.users.router import router as users_router
 from app.modules.groups.router import router as groups_router
 from app.modules.chat.router import router as chat_router
+from app.modules.events.router import router as events_router
 from app.realtime.pubsub import pubsub_manager
 from app.realtime.manager import manager
 from app.realtime.chat import chat_socket_handler
@@ -129,6 +130,7 @@ app.include_router(tenants_router, prefix="/api/v1")
 app.include_router(users_router, prefix="/api/v1")
 app.include_router(groups_router, prefix="/api/v1")
 app.include_router(chat_router, prefix="/api/v1")
+app.include_router(events_router, prefix="/api/v1")
 
 app.add_api_websocket_route("/chat/groups/{group_id}", chat_socket_handler)
 
