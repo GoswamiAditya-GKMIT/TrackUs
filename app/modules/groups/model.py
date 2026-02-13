@@ -16,6 +16,7 @@ from app.common.enums import GroupMemberRole
 if TYPE_CHECKING:
     from app.modules.tenants.model import Tenant
     from app.modules.users.model import User
+    from app.modules.events.model import TravelEvent
 
 
 class Group(Base, UUIDMixin, TimestampMixin, SoftDeleteMixin):
@@ -70,6 +71,13 @@ class Group(Base, UUIDMixin, TimestampMixin, SoftDeleteMixin):
         back_populates="group",
         cascade="all, delete-orphan",
         lazy="selectin"
+    )
+    
+    events: Mapped[list["TravelEvent"]] = relationship(
+        "TravelEvent",
+        back_populates="group",
+        cascade="all, delete-orphan",
+        lazy="select"
     )
 
     # Constraints and Indexes

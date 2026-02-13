@@ -8,6 +8,7 @@ from app.common.mixins import UUIDMixin, TimestampMixin, SoftDeleteMixin
 
 if TYPE_CHECKING:
     from app.modules.users.model import User
+    from app.modules.events.model import TravelEvent
 
 
 class Tenant(Base, UUIDMixin, TimestampMixin, SoftDeleteMixin):
@@ -37,6 +38,12 @@ class Tenant(Base, UUIDMixin, TimestampMixin, SoftDeleteMixin):
         "User",
         back_populates="tenant",
         lazy="selectin"
+    )
+    
+    events: Mapped[list["TravelEvent"]] = relationship(
+        "TravelEvent",
+        back_populates="tenant",
+        lazy="select"
     )
     
     def __repr__(self) -> str:
