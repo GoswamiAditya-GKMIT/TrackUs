@@ -35,6 +35,7 @@ class EventResponse(BaseModel):
     status: str
     created_by: uuid.UUID
     creator_name: Optional[str] = None
+    participant_count: Optional[int] = None
     created_at: datetime
     updated_at: datetime
     
@@ -48,3 +49,22 @@ class EventUpdate(BaseModel):
     start_time: Optional[datetime] = None
     end_time: Optional[datetime] = None
     status: Optional[EventStatus] = None
+
+
+class ParticipantResponse(BaseModel):
+    """Participant response schema."""
+    id: uuid.UUID
+    user_id: uuid.UUID
+    user_name: Optional[str] = None
+    user_email: Optional[str] = None
+    status: str
+    responded_at: Optional[datetime] = None
+    created_at: datetime
+    
+    class Config:
+        from_attributes = True
+
+
+class ParticipantAddRequest(BaseModel):
+    """Request to add a participant to an event."""
+    user_id: uuid.UUID = Field(..., description="ID of the user to add as participant")
