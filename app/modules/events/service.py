@@ -10,10 +10,10 @@ from sqlalchemy import select, and_, func
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.modules.events.model import TravelEvent
-from app.common.enums import EventStatus
+from app.modules.events.model import TravelEvent, EventParticipant
+from app.common.enums import EventStatus, ParticipantStatus
 from app.modules.events.schema import EventCreate, EventUpdate
-from app.modules.groups.model import Group
+from app.modules.groups.model import Group, GroupMember
 from app.modules.users.model import User
 from app.core.exceptions import (
     BadRequestException,
@@ -26,6 +26,9 @@ logger = logging.getLogger(__name__)
 
 
 class EventService:
+    """Service for managing travel events and participants."""
+
+    # ==================== Event Management Methods ====================
 
     @staticmethod
     async def create_event(
@@ -93,13 +96,45 @@ class EventService:
             destination=event_data.destination,
             start_time=event_data.start_time,
             end_time=event_data.end_time,
-            status=EventStatus.PLANNED.value,
+            status=EventStatus.PLANNED,
             created_by=creator.id
         )
         
         db.add(event)
+        await db.flush()  # Flush to get event.id
+        
+        # Auto-invite all group members
+        # Fetch all group members
+        members_query = select(GroupMember).where(
+            and_(
+                GroupMember.group_id == group_id,
+                GroupMember.left_at.is_(None)
+            )
+        )
+        members_result = await db.execute(members_query)
+        members = members_result.scalars().all()
+        
+        # Create participant records
+        for member in members:
+            # Creator is auto-accepted, others are invited
+            if member.user_id == creator.id:
+                status = ParticipantStatus.ACCEPTED
+                responded_at = datetime.now(timezone.utc)
+            else:
+                status = ParticipantStatus.INVITED
+                responded_at = None
+            
+            participant = EventParticipant(
+                event_id=event.id,
+                user_id=member.user_id,
+                status=status,
+                responded_at=responded_at
+            )
+            db.add(participant)
+        
         await db.commit()
         
+        # Reload event with relationships
         query = select(TravelEvent).options(
             selectinload(TravelEvent.creator),
             selectinload(TravelEvent.group),
@@ -109,6 +144,10 @@ class EventService:
         result = await db.execute(query)
         event = result.scalar_one()
         
+        logger.info(
+            f"Event {event.id} created by user {creator.id} in group {group_id} "
+            f"with {len(members)} participants auto-invited"
+        )
         
         return event
 
@@ -121,14 +160,8 @@ class EventService:
     ) -> tuple[Sequence[TravelEvent], int]:
         """
         List all events in a group, ordered by start_time descending.
-        Args:
-            db: Database session
-            group_id: Group ID
-            skip: Number of records to skip
-            limit: Maximum number of records to return  
-        Returns:
-            Tuple of (events list, total count)
         """
+
         count_query = select(func.count()).select_from(TravelEvent).where(
             and_(
                 TravelEvent.group_id == group_id,
@@ -181,3 +214,250 @@ class EventService:
         
         result = await db.execute(query)
         return result.scalar_one_or_none()
+
+    # ==================== Participant Management Methods ====================
+
+    @staticmethod
+    async def list_participants(
+        db: AsyncSession,
+        event_id: uuid.UUID
+    ) -> Sequence[EventParticipant]:
+        """
+        List all participants for an event.
+        """
+        query = select(EventParticipant).options(
+            selectinload(EventParticipant.user),
+            selectinload(EventParticipant.event)
+        ).where(
+            EventParticipant.event_id == event_id
+        ).order_by(EventParticipant.created_at.asc())
+        
+        result = await db.execute(query)
+        participants = result.scalars().all()
+        
+        logger.info(f"Listed {len(participants)} participants for event {event_id}")
+        
+        return participants
+    
+    @staticmethod
+    async def _get_participant(
+        db: AsyncSession,
+        event_id: uuid.UUID,
+        user_id: uuid.UUID
+    ) -> Optional[EventParticipant]:
+        """Helper to get a participant record."""
+        query = select(EventParticipant).options(
+            selectinload(EventParticipant.user),
+            selectinload(EventParticipant.event)
+        ).where(
+            and_(
+                EventParticipant.event_id == event_id,
+                EventParticipant.user_id == user_id
+            )
+        )
+        
+        result = await db.execute(query)
+        return result.scalar_one_or_none()
+    
+    @staticmethod
+    async def _validate_state_transition(
+        current_status: ParticipantStatus,
+        new_status: ParticipantStatus,
+        action: str
+    ) -> None:
+        """
+        Validate state transitions.
+        
+        Valid transitions:
+        - INVITED → ACCEPTED
+        - INVITED → REJECTED
+        - ACCEPTED → LEFT
+        - ANY → REMOVED (admin only)
+        """
+        valid_transitions = {
+            (ParticipantStatus.INVITED, ParticipantStatus.ACCEPTED),
+            (ParticipantStatus.INVITED, ParticipantStatus.REJECTED),
+            (ParticipantStatus.ACCEPTED, ParticipantStatus.LEFT),
+        }
+        
+        # REMOVED can be from any state (admin action)
+        if new_status == ParticipantStatus.REMOVED:
+            return
+        
+        if (current_status, new_status) not in valid_transitions:
+            raise BadRequestException(
+                detail=f"Cannot {action} from current status '{current_status}'"
+            )
+    
+    @staticmethod
+    async def accept_invitation(
+        db: AsyncSession,
+        event_id: uuid.UUID,
+        user: User
+    ) -> EventParticipant:
+        """
+        Accept event invitation.
+        """
+        participant = await EventService._get_participant(db, event_id, user.id)
+        
+        if not participant:
+            raise NotFoundException(detail="You are not invited to this event")
+        
+        # Validate state transition
+        await EventService._validate_state_transition(
+            participant.status,
+            ParticipantStatus.ACCEPTED,
+            "accept invitation"
+        )
+        
+        # Update status
+        participant.status = ParticipantStatus.ACCEPTED
+        participant.responded_at = datetime.now(timezone.utc)
+        
+        await db.commit()
+        await db.refresh(participant)
+        
+        logger.info(f"User {user.id} accepted invitation to event {event_id}")
+        
+        return participant
+    
+    @staticmethod
+    async def reject_invitation(
+        db: AsyncSession,
+        event_id: uuid.UUID,
+        user: User
+    ) -> EventParticipant:
+        """
+        Reject event invitation.
+        """
+        participant = await EventService._get_participant(db, event_id, user.id)
+        
+        if not participant:
+            raise NotFoundException(detail="You are not invited to this event")
+        
+        # Validate state transition
+        await EventService._validate_state_transition(
+            participant.status,
+            ParticipantStatus.REJECTED,
+            "reject invitation"
+        )
+        
+        # Update status
+        participant.status = ParticipantStatus.REJECTED
+        participant.responded_at = datetime.now(timezone.utc)
+        
+        await db.commit()
+        await db.refresh(participant)
+        
+        logger.info(f"User {user.id} rejected invitation to event {event_id}")
+        
+        return participant
+    
+    @staticmethod
+    async def leave_event(
+        db: AsyncSession,
+        event_id: uuid.UUID,
+        user: User
+    ) -> EventParticipant:
+        """
+        Leave an event.
+        """
+        participant = await EventService._get_participant(db, event_id, user.id)
+        
+        if not participant:
+            raise NotFoundException(detail="You are not a participant of this event")
+
+        # Prevent event creator from leaving
+        if participant.event.created_by == user.id:
+            raise BadRequestException(detail="Event creator cannot leave the event")
+        
+        # Validate state transition
+        await EventService._validate_state_transition(
+            participant.status,
+            ParticipantStatus.LEFT,
+            "leave event"
+        )
+        
+        # Update status
+        participant.status = ParticipantStatus.LEFT
+        participant.responded_at = datetime.now(timezone.utc)
+        
+        await db.commit()
+        await db.refresh(participant)
+        
+        logger.info(f"User {user.id} left event {event_id}")
+        
+        return participant
+    
+    @staticmethod
+    async def add_participant(
+        db: AsyncSession,
+        event_id: uuid.UUID,
+        target_user_id: uuid.UUID,
+        event: TravelEvent
+    ) -> EventParticipant:
+        """
+        Add a participant to an event (admin only).
+        """
+        # Check if user is a group member
+        member_query = select(GroupMember).where(
+            and_(
+                GroupMember.group_id == event.group_id,
+                GroupMember.user_id == target_user_id,
+                GroupMember.left_at.is_(None)
+            )
+        )
+        member_result = await db.execute(member_query)
+        member = member_result.scalar_one_or_none()
+        
+        if not member:
+            raise BadRequestException(detail="User is not a member of this group")
+        
+        # Check if already a participant
+        existing = await EventService._get_participant(db, event_id, target_user_id)
+        if existing:
+            raise BadRequestException(detail="User is already a participant")
+        
+        # Create participant
+        participant = EventParticipant(
+            event_id=event_id,
+            user_id=target_user_id,
+            status=ParticipantStatus.INVITED
+        )
+        
+        db.add(participant)
+        await db.commit()
+        await db.refresh(participant)
+        
+        logger.info(f"User {target_user_id} added to event {event_id} by admin")
+        
+        return participant
+    
+    @staticmethod
+    async def remove_participant(
+        db: AsyncSession,
+        event_id: uuid.UUID,
+        target_user_id: uuid.UUID
+    ) -> None:
+        """
+        Remove a participant from an event (admin only).
+        """
+        participant = await EventService._get_participant(db, event_id, target_user_id)
+        
+        if not participant:
+            raise NotFoundException(detail="Participant not found")
+
+        # Prevent removal of event creator
+        if participant.event.created_by == target_user_id:
+            raise BadRequestException(detail="Event creator cannot be removed from the event")
+        
+        # Update status to REMOVED
+        participant.status = ParticipantStatus.REMOVED
+        participant.responded_at = datetime.now(timezone.utc)
+        
+        await db.commit()
+        
+        logger.info(f"User {target_user_id} removed from event {event_id} by admin")
+
+
+__all__ = ["EventService"]
