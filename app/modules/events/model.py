@@ -5,13 +5,13 @@ from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Optional
 import uuid
 
-from sqlalchemy import String, ForeignKey, DateTime, CheckConstraint, Index
+from sqlalchemy import String, ForeignKey, DateTime, CheckConstraint, Index, UniqueConstraint, Enum as SQLEnum
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
 from app.common.mixins import UUIDMixin, TimestampMixin, SoftDeleteMixin
-from app.common.enums import EventStatus
+from app.common.enums import EventStatus, ParticipantStatus
 
 if TYPE_CHECKING:
     from app.modules.tenants.model import Tenant
@@ -62,11 +62,10 @@ class TravelEvent(Base, UUIDMixin, TimestampMixin, SoftDeleteMixin):
         nullable=False
     )
 
-    status: Mapped[str] = mapped_column(
-        String(20),
+    status: Mapped[EventStatus] = mapped_column(
+        SQLEnum(EventStatus, name="event_status", create_type=True),
         nullable=False,
-        default=EventStatus.PLANNED.value,
-        server_default=EventStatus.PLANNED.value
+        default=EventStatus.PLANNED
     )
 
     created_by: Mapped[uuid.UUID] = mapped_column(
@@ -79,6 +78,11 @@ class TravelEvent(Base, UUIDMixin, TimestampMixin, SoftDeleteMixin):
     tenant: Mapped["Tenant"] = relationship("Tenant", back_populates="events")
     group: Mapped["Group"] = relationship("Group", back_populates="events")
     creator: Mapped["User"] = relationship("User", foreign_keys=[created_by])
+    participants: Mapped[list["EventParticipant"]] = relationship(
+        "EventParticipant",
+        back_populates="event",
+        cascade="all, delete-orphan"
+    )
 
     # Table constraints
     __table_args__ = (
@@ -103,3 +107,53 @@ class TravelEvent(Base, UUIDMixin, TimestampMixin, SoftDeleteMixin):
 
     def __repr__(self) -> str:
         return f"<TravelEvent(id={self.id}, name={self.name}, destination={self.destination})>"
+
+
+class EventParticipant(Base, UUIDMixin, TimestampMixin):
+
+    __tablename__ = "event_participants"
+
+    event_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("travel_events.id", ondelete="CASCADE"),
+        nullable=False
+    )
+
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False
+    )
+
+    status: Mapped[ParticipantStatus] = mapped_column(
+        SQLEnum(ParticipantStatus, name="participant_status", create_type=True),
+        nullable=False,
+        default=ParticipantStatus.INVITED
+    )
+
+    responded_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True
+    )
+
+    # Relationships
+    event: Mapped["TravelEvent"] = relationship("TravelEvent", back_populates="participants")
+    user: Mapped["User"] = relationship("User")
+
+    # Table constraints
+    __table_args__ = (
+        UniqueConstraint("event_id", "user_id", name="unique_event_participant"),
+    )
+
+    @property
+    def user_name(self) -> Optional[str]:
+        """Get participant's full name."""
+        return self.user.full_name if self.user else None
+
+    @property
+    def user_email(self) -> Optional[str]:
+        """Get participant's email."""
+        return self.user.email if self.user else None
+
+    def __repr__(self) -> str:
+        return f"<EventParticipant(id={self.id}, event_id={self.event_id}, user_id={self.user_id}, status={self.status})>"
