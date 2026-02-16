@@ -14,7 +14,7 @@ from app.modules.users.model import User
 from app.modules.groups.model import GroupMember
 from app.modules.events.model import TravelEvent
 from app.modules.events.service import EventService
-from app.modules.events.schema import EventCreate, EventResponse, ParticipantResponse, ParticipantAddRequest
+from app.modules.events.schema import EventCreate, EventResponse, ParticipantResponse, ParticipantAddRequest, EventUpdate
 from app.common.response_utils import success_response, paginated_response
 from app.common.responses import SuccessResponse, PaginatedResponse
 from app.dependencies.common import PaginationParams
@@ -81,6 +81,35 @@ async def list_events(
         total=total,
         skip=pagination.skip,
         limit=pagination.limit
+    )
+
+
+@router.patch(
+    "/events/{event_id}",
+    response_model=SuccessResponse[EventResponse],
+    summary="Update an event"
+)
+async def update_event(
+    event_id: uuid.UUID,
+    update_data: EventUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Update an event.
+    Permissions: Event creator or group admin only
+    Returns: Updated event
+    """
+    event = await EventService.update_event(
+        db=db,
+        event_id=event_id,
+        update_data=update_data,
+        user=current_user
+    )
+    
+    return success_response(
+        message="Event updated successfully",
+        data=EventResponse.model_validate(event)
     )
 
 
