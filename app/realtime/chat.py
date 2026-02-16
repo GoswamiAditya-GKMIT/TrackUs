@@ -18,6 +18,10 @@ from app.realtime.manager import manager
 from app.core.exceptions import AuthenticationException, PermissionDeniedException
 from app.modules.groups.service import GroupService
 from app.modules.groups.service import MembershipService
+from app.modules.events.service import EventService
+from app.modules.chat.service import EventChatService
+from app.common.enums import ParticipantStatus
+
 
 
 
@@ -115,3 +119,68 @@ async def chat_socket_handler(
     except Exception as e:
         logger.error(f"WS Link error: {e}")
         manager.disconnect(websocket, group_id_str, str(user.id))
+
+
+async def event_chat_socket_handler(
+    websocket: WebSocket,
+    event_id: uuid.UUID,
+    token: str = Query(...)
+):
+    """
+    WebSocket handler for event chat.
+    Path: /chat/events/{event_id}
+    """
+    user = await get_ws_user(token)
+    if not user:
+        await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
+        return
+    
+    event_id_str = str(event_id)
+    
+    # 2. Validate Participant Status & Tenant
+    async with AsyncSessionLocal() as db:
+        try:
+            # We must check if user is an ACCEPTED participant
+            participant = await EventService._get_participant(db, event_id, user.id)
+            if not participant or participant.status != ParticipantStatus.ACCEPTED:
+                 await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
+                 return
+        except Exception as e:
+            logger.error(f"WS Connection validation failed for event {event_id}: {e}")
+            await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
+            return
+
+    # 3. Connect to Manager (using event_id as the group key)
+    # The manager is generic, so we can use event_id_str as group_id
+    await manager.connect(websocket, event_id_str, str(user.id))
+
+    try:
+        while True:
+            # 4. Listen for messages
+            message_text = await websocket.receive_text()
+            
+            if not message_text.strip():
+                continue
+            
+            async with AsyncSessionLocal() as db:
+                msg_create = ChatMessageCreate(message=message_text)
+                try:
+                    message = await EventChatService.create_message(
+                        db, event_id, user, msg_create
+                    )
+                    # 5. Broadcast to all members
+                    payload = EventChatService.get_broadcast_payload(message)
+                    await manager.broadcast(event_id_str, payload)
+                except PermissionDeniedException as e:
+                    logger.warning(f"Permission denied for user {user.id} in event {event_id}: {e.detail}")
+                    await websocket.send_json({"type": "error", "message": e.detail})
+                except Exception as e:
+                    logger.error(f"WS Message persistence error in event {event_id}: {e}")
+                    await websocket.send_json({"type": "error", "message": "Failed to send message"})
+
+    except WebSocketDisconnect:
+        manager.disconnect(websocket, event_id_str, str(user.id))
+        logger.info(f"User {user.id} disconnected from event {event_id}")
+    except Exception as e:
+        logger.error(f"WS Link error in event {event_id}: {e}")
+        manager.disconnect(websocket, event_id_str, str(user.id))

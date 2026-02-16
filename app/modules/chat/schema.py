@@ -28,3 +28,15 @@ class ChatMessageResponse(ChatMessageBase):
     class Config:
         from_attributes = True
         populate_by_name = True
+
+
+class EventMessageResponse(ChatMessageBase):
+    message_id: uuid.UUID = Field(alias="id")
+    event_id: uuid.UUID
+    message_type: MessageType
+    sender_id: Optional[uuid.UUID]
+    sender_name: Optional[str]
+
+    class Config:
+        from_attributes = True
+        populate_by_name = True
