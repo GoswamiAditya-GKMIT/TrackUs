@@ -17,6 +17,7 @@ if TYPE_CHECKING:
     from app.modules.tenants.model import Tenant
     from app.modules.groups.model import Group
     from app.modules.users.model import User
+    from app.modules.events.model import TravelEvent
 
 
 class GroupMessage(Base, UUIDMixin, TimestampMixin):
@@ -68,3 +69,54 @@ class GroupMessage(Base, UUIDMixin, TimestampMixin):
 
     def __repr__(self) -> str:
         return f"<GroupMessage(id={self.id}, group_id={self.group_id}, sender_id={self.sender_id})>"
+
+
+class EventMessage(Base, UUIDMixin, TimestampMixin):
+    """
+    Stores messages sent within an event.
+    """
+    __tablename__ = "event_messages"
+
+    tenant_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("tenants.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True
+    )
+    
+    event_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("travel_events.id", ondelete="CASCADE"), 
+        nullable=False,
+        index=True
+    )
+    
+    sender_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True
+    )
+    
+    message_type: Mapped[MessageType] = mapped_column(
+        SQLEnum(MessageType, name="messagetype", create_type=False), 
+        nullable=False,
+        default=MessageType.TEXT
+    )
+    
+    message: Mapped[str] = mapped_column(
+        Text,
+        nullable=False
+    )
+
+    # Relationships
+    tenant: Mapped["Tenant"] = relationship("Tenant", lazy="selectin")
+    event: Mapped["TravelEvent"] = relationship("TravelEvent", lazy="selectin")
+    sender: Mapped[Optional["User"]] = relationship("User", lazy="selectin")
+
+    @property
+    def sender_name(self) -> Optional[str]:
+        return self.sender.full_name if self.sender else "System"
+
+    def __repr__(self) -> str:
+        return f"<EventMessage(id={self.id}, event_id={self.event_id}, sender_id={self.sender_id})>"
