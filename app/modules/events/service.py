@@ -21,14 +21,19 @@ from app.core.exceptions import (
     PermissionDeniedException,
     TenantIsolationException
 )
+from app.modules.notifications.service import NotificationService
+from app.modules.notifications.schema import NotificationCreate
+from app.common.constants import NotificationType, ReferenceType
+from app.modules.groups.service import GroupService
 
 logger = logging.getLogger(__name__)
+
 
 
 class EventService:
     """Service for managing travel events and participants."""
 
-    # ==================== Event Management Methods ====================
+    # Event Management Methods
 
     @staticmethod
     async def create_event(
@@ -137,6 +142,25 @@ class EventService:
             f"Event {event.id} created by user {creator.id} in group {group_id} "
             f"with {len(members)} participants auto-invited"
         )
+        
+
+        invited_ids = [m.user_id for m in members if m.user_id != creator.id]
+        if invited_ids:
+            try:
+                await NotificationService.create_bulk_notifications(
+                    db,
+                    NotificationCreate(
+                        type=NotificationType.EVENT_INVITED,
+                        title=f"New Event: {event.name}",
+                        message=f"You have been invited to event '{event.name}'",
+                        reference_type=ReferenceType.EVENT,
+                        reference_id=event.id
+                    ),
+                    receiver_ids=invited_ids,
+                    tenant_id=creator.tenant_id
+                )
+            except Exception as e:
+                logger.error(f"Failed to send notifications for event create: {e}")
         
         return event
 
@@ -319,6 +343,39 @@ class EventService:
         await db.refresh(event)
         
         logger.info(f"Event {event.id} updated by user {user.id}. New Permission: {event.status}")
+        
+        # Trigger Notification if Cancelled
+        if event.status == EventStatus.CANCELLED:
+            # Notify all participants 
+            # Fetch participants
+            parts_query = select(EventParticipant).where(
+                and_(
+                    EventParticipant.event_id == event.id,
+                    EventParticipant.status.in_([ParticipantStatus.ACCEPTED, ParticipantStatus.INVITED])
+                )
+            )
+            parts_result = await db.execute(parts_query)
+            participants = parts_result.scalars().all()
+            
+            receiver_ids = [p.user_id for p in participants if p.user_id != user.id]
+            
+            if receiver_ids:
+                try:
+                    await NotificationService.create_bulk_notifications(
+                        db,
+                        NotificationCreate(
+                            type=NotificationType.EVENT_CANCELLED,
+                            title=f"Event Cancelled: {event.name}",
+                            message=f"Event '{event.name}' has been cancelled by {user.first_name}",
+                            reference_type=ReferenceType.EVENT,
+                            reference_id=event.id
+                        ),
+                        receiver_ids=receiver_ids,
+                        tenant_id=event.tenant_id
+                    )
+                except Exception as e:
+                    logger.error(f"Failed to send notifications for event cancel: {e}")
+
         return event
 
     # ==================== Participant Management Methods ====================
@@ -571,6 +628,22 @@ class EventService:
         await db.commit()
         
         logger.info(f"User {target_user_id} removed from event {event_id} by admin")
+        
+        try:
+             await NotificationService.create_notification(
+                db,
+                NotificationCreate(
+                    type=NotificationType.PARTICIPANT_REMOVED,
+                    title=f"Removed from event",
+                    message=f"You have been removed from event {event_id}",
+                    reference_type=ReferenceType.EVENT,
+                    reference_id=event_id
+                ),
+                receiver_id=target_user_id,
+                tenant_id=participant.event.tenant_id
+            )
+        except Exception as e:
+            logger.error(f"Failed to send notification for participant remove: {e}")
 
 
 __all__ = ["EventService"]

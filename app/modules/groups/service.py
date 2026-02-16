@@ -21,6 +21,10 @@ from app.core.exceptions import (
     PermissionDeniedException,
     TenantIsolationException
 )
+from app.modules.notifications.service import NotificationService
+from app.modules.notifications.schema import NotificationCreate
+from app.common.constants import NotificationType, ReferenceType
+        
 
 logger = logging.getLogger(__name__)
 
@@ -295,7 +299,6 @@ class MembershipService:
             logger.info(f"Reactivating membership for user {member_data.user_id} in group {group_id}")
             membership.left_at = None
             membership.role = member_data.role
-            # Update updated_at automatically via TimestampMixin
         else:
             # Create new membership
             membership = GroupMember(
@@ -307,6 +310,24 @@ class MembershipService:
         
         await db.commit()
         await db.refresh(membership)
+        
+
+        try:
+            await NotificationService.create_notification(
+                db,
+                NotificationCreate(
+                    type=NotificationType.GROUP_ADDED, 
+                    title=f"Added to group {group_id}",
+                    message=f"You have been added to a group by user {requester.first_name}",
+                    reference_type=ReferenceType.GROUP,
+                    reference_id=group_id
+                ),
+                receiver_id=member_data.user_id,
+                tenant_id=requester.tenant_id
+            )
+        except Exception as e:
+            logger.error(f"Failed to send notification for group add: {e}")
+
         logger.info(f"User {member_data.user_id} added/reactivated in group {group_id} by {requester.id}")
         return membership
 
