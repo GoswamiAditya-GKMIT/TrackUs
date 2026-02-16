@@ -18,5 +18,6 @@ def import_models():
     from app.modules.chat.model import GroupMessage, EventMessage
     from app.modules.events.model import TravelEvent
     from app.modules.location.model import LiveLocation
+    from app.modules.notifications.model import Notification
 
 

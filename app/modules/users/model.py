@@ -12,6 +12,7 @@ from app.common.enums import UserRole
 if TYPE_CHECKING:
     from app.modules.tenants.model import Tenant
     from app.modules.auth.model import TokenBlacklist
+    from app.modules.notifications.model import Notification
 
 
 class User(Base, UUIDMixin, TimestampMixin, SoftDeleteMixin):
@@ -66,10 +67,17 @@ class User(Base, UUIDMixin, TimestampMixin, SoftDeleteMixin):
         lazy="selectin"
     )
     
-    blacklisted_tokens: Mapped[list["TokenBlacklist"]] = relationship(
+    blacklisted_tokens = relationship(
         "TokenBlacklist",
         back_populates="user",
         cascade="all, delete-orphan"
+    )
+
+    notifications = relationship(
+        "Notification",
+        back_populates="receiver",
+        cascade="all, delete-orphan",
+        lazy="select"
     )
     
     def __repr__(self) -> str:
