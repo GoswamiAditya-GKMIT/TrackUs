@@ -20,6 +20,8 @@ from app.modules.events.service import EventService
 from app.common.enums import ParticipantStatus
 from app.modules.chat.model import EventMessage
 from app.modules.chat.schema import EventMessageResponse
+from app.common.enums import EventStatus
+
 
 
 
@@ -146,6 +148,12 @@ class EventChatService:
         if not participant or participant.status != ParticipantStatus.ACCEPTED:
             raise PermissionDeniedException(
                 detail="You must be an ACCEPTED participant to send messages"
+            )
+
+        # Lifecycle Check: Chat is closed for COMPLETED/CANCELLED events
+        if participant.event.status in [EventStatus.COMPLETED, EventStatus.CANCELLED]:
+            raise PermissionDeniedException(
+                detail="Cannot send messages in a completed or cancelled event"
             )
 
         message = EventMessage(

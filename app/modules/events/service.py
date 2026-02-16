@@ -11,7 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.modules.events.model import TravelEvent, EventParticipant
-from app.common.enums import EventStatus, ParticipantStatus
+from app.common.enums import EventStatus, ParticipantStatus, GroupMemberRole
 from app.modules.events.schema import EventCreate, EventUpdate
 from app.modules.groups.model import Group, GroupMember
 from app.modules.users.model import User
@@ -39,17 +39,6 @@ class EventService:
     ) -> TravelEvent:
         """
         Create a new travel event in a group.
-        Args:
-            db: Database session
-            group_id: Group ID
-            event_data: Event creation data
-            creator: User creating the event  
-        Returns:
-            Created TravelEvent
-        Raises:
-            NotFoundException: If group not found
-            TenantIsolationException: If tenant mismatch
-            BadRequestException: If invalid time range
         """
         query = select(Group).options(
             selectinload(Group.tenant)
@@ -212,8 +201,125 @@ class EventService:
             )
         )
         
+    @staticmethod
+    def _validate_status_transition(
+        current_status: EventStatus,
+        new_status: EventStatus
+    ) -> None:
+        """
+        Validate event status transitions.
+        
+        Valid transitions:
+        - PLANNED → ONGOING
+        - PLANNED → CANCELLED
+        - ONGOING → COMPLETED
+        - ONGOING → CANCELLED
+        """
+        valid_transitions = {
+            (EventStatus.PLANNED, EventStatus.ONGOING),
+            (EventStatus.PLANNED, EventStatus.CANCELLED),
+            (EventStatus.ONGOING, EventStatus.COMPLETED),
+            (EventStatus.ONGOING, EventStatus.CANCELLED),
+        }
+        
+        if current_status == new_status:
+            return
+
+        if (current_status, new_status) not in valid_transitions:
+            raise BadRequestException(
+                detail=f"Invalid status transition from {current_status} to {new_status}"
+            )
+
+    @staticmethod
+    async def update_event(
+        db: AsyncSession,
+        event_id: uuid.UUID,
+        update_data: EventUpdate,
+        user: User
+    ) -> TravelEvent:
+        """
+        Update an event. Only Creator or Group Admin can update.
+        """
+        # Fetch event with group to check permissions
+        query = select(TravelEvent).options(
+            selectinload(TravelEvent.group).selectinload(Group.members)
+        ).where(
+            and_(
+                TravelEvent.id == event_id,
+                TravelEvent.deleted_at.is_(None)
+            )
+        )
         result = await db.execute(query)
-        return result.scalar_one_or_none()
+        event = result.scalar_one_or_none()
+        
+        if not event:
+            raise NotFoundException(detail="Event not found")
+
+        # Check Permissions: Creator OR Group Admin
+        is_creator = event.created_by == user.id
+        
+        # Check if user is group admin
+        is_group_admin = False
+        if not is_creator:
+            # Check membership role
+            member_query = select(GroupMember).where(
+                and_(
+                    GroupMember.group_id == event.group_id,
+                    GroupMember.user_id == user.id,
+                    GroupMember.role == GroupMemberRole.ADMIN,
+                    GroupMember.left_at.is_(None)
+                )
+            )
+            member_result = await db.execute(member_query)
+            if member_result.scalar_one_or_none():
+                is_group_admin = True
+        
+        if not (is_creator or is_group_admin):
+            raise PermissionDeniedException(
+                detail="Only the event creator or group admin can update this event"
+            )
+
+        # Apply Updates
+        if update_data.status:
+            EventService._validate_status_transition(event.status, update_data.status)
+            event.status = update_data.status
+        
+        if update_data.name and update_data.name != event.name:
+            # Check for name uniqueness in the group
+            name_query = select(TravelEvent).where(
+                and_(
+                    TravelEvent.group_id == event.group_id,
+                    TravelEvent.name == update_data.name,
+                    TravelEvent.id != event.id,
+                    TravelEvent.deleted_at.is_(None)
+                )
+            )
+            name_result = await db.execute(name_query)
+            if name_result.scalar_one_or_none():
+                raise BadRequestException(
+                    detail=f"Event with name '{update_data.name}' already exists in this group"
+                )
+            event.name = update_data.name
+
+        if update_data.destination:
+            event.destination = update_data.destination
+        if update_data.start_time:
+            event.start_time = update_data.start_time
+        if update_data.end_time:
+            event.end_time = update_data.end_time
+            
+        # Validate time range if both changed or one changed
+        start = update_data.start_time or event.start_time
+        end = update_data.end_time or event.end_time
+        if end <= start:
+             raise BadRequestException(detail="End time must be after start time")
+
+        event.updated_at = datetime.now(timezone.utc)
+        await db.commit()
+        await db.refresh(event)
+        
+        logger.info(f"Event {event.id} updated by user {user.id}. New Permission: {event.status}")
+        return event
 
     # ==================== Participant Management Methods ====================
 
@@ -303,6 +409,10 @@ class EventService:
         if not participant:
             raise NotFoundException(detail="You are not invited to this event")
         
+        # Lifecycle Check: Cannot accept if event is closed
+        if participant.event.status in [EventStatus.COMPLETED, EventStatus.CANCELLED]:
+             raise BadRequestException(detail="Cannot accept invitation for a completed or cancelled event")
+
         # Validate state transition
         await EventService._validate_state_transition(
             participant.status,
@@ -399,6 +509,10 @@ class EventService:
         """
         Add a participant to an event (admin only).
         """
+        # Lifecycle Check: Cannot add if event is not PLANNED
+        if event.status != EventStatus.PLANNED:
+             raise BadRequestException(detail="Cannot add participants unless event is PLANNED")
+
         # Check if user is a group member
         member_query = select(GroupMember).where(
             and_(
@@ -451,7 +565,6 @@ class EventService:
         if participant.event.created_by == target_user_id:
             raise BadRequestException(detail="Event creator cannot be removed from the event")
         
-        # Update status to REMOVED
         participant.status = ParticipantStatus.REMOVED
         participant.responded_at = datetime.now(timezone.utc)
         
