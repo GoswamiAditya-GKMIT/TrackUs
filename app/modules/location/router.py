@@ -13,6 +13,8 @@ from app.db.session import get_db
 from app.modules.users.model import User
 from app.dependencies.auth import get_current_user
 from app.common.response_utils import success_response, SuccessResponse, paginated_response
+from app.common.responses import PaginatedResponse
+from app.dependencies.common import PaginationParams
 from app.modules.location.service import LocationService
 from app.modules.location.schema import LocationResponse
 from app.realtime.location_simulator import LocationSimulator
@@ -23,11 +25,12 @@ router = APIRouter(prefix="/events/{event_id}", tags=["location"])
 
 @router.get(
     "/locations",
-    response_model=SuccessResponse[List[LocationResponse]],
+    response_model=PaginatedResponse[LocationResponse],
     summary="Get locations for an event"
 )
 async def get_event_locations(
     event_id: uuid.UUID,
+    pagination: PaginationParams = Depends(),
     active_only: bool = Query(False, description="Filter for currently active locations only"),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user)
@@ -41,10 +44,20 @@ async def get_event_locations(
     if not participant:
          raise PermissionDeniedException(detail="You are not a participant of this event")
 
-    locations = await LocationService.get_event_locations(db, event_id, active_only=active_only)
-    return success_response(
+    locations, total = await LocationService.get_event_locations(
+        db, 
+        event_id, 
+        active_only=active_only,
+        skip=pagination.skip,
+        limit=pagination.limit
+    )
+    
+    return paginated_response(
         message="Locations retrieved successfully",
-        data=[LocationResponse.model_validate(loc) for loc in locations]
+        data=[LocationResponse.model_validate(loc) for loc in locations],
+        total=total,
+        skip=pagination.skip,
+        limit=pagination.limit
     )
 
 

@@ -6,7 +6,7 @@ from datetime import datetime, timezone
 import uuid
 from typing import Sequence, Optional
 
-from sqlalchemy import select, and_, update
+from sqlalchemy import select, and_, update, func
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -152,22 +152,34 @@ class LocationService:
     async def get_event_locations(
         db: AsyncSession,
         event_id: uuid.UUID,
-        active_only: bool = True
-    ) -> Sequence[LiveLocation]:
+        active_only: bool = True,
+        skip: int = 0,
+        limit: int = 20
+    ) -> tuple[Sequence[LiveLocation], int]:
         """
-        Get locations for an event. 
+        Get locations for an event with pagination.
         If active_only is True, returns only currently sharing users.
         If active_only is False, returns all users' last known locations.
         """
-        query = select(LiveLocation).options(
-            selectinload(LiveLocation.user)
-        ).where(LiveLocation.event_id == event_id)
-
+        # Base query for filtering
+        base_query = select(LiveLocation).where(LiveLocation.event_id == event_id)
         if active_only:
-             query = query.where(LiveLocation.is_active == True)
+            base_query = base_query.where(LiveLocation.is_active == True)
+
+        # Count total
+        count_query = select(func.count()).select_from(base_query.subquery())
+        total_result = await db.execute(count_query)
+        total = total_result.scalar_one()
+
+        # List with pagination
+        query = base_query.options(
+            selectinload(LiveLocation.user)
+        ).offset(skip).limit(limit)
 
         result = await db.execute(query)
-        return result.scalars().all()
+        locations = result.scalars().all()
+        
+        return locations, total
 
     @staticmethod
     async def stop_sharing(

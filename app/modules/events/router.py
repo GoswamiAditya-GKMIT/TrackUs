@@ -117,20 +117,26 @@ async def update_event(
 
 @router.get(
     "/events/{event_id}/participants",
-    response_model=SuccessResponse[list[ParticipantResponse]],
+    response_model=PaginatedResponse[ParticipantResponse],
     summary="List all participants of an event"
 )
 async def list_participants(
     event_id: uuid.UUID,
+    pagination: PaginationParams = Depends(),
     db: AsyncSession = Depends(get_db),
     event: TravelEvent = Depends(get_accessible_event)
 ):
     """
     List all participants of an event.
     Permissions: Active group member
-    Returns: List of participants with their status
+    Returns: Paginated list of participants with their status
     """
-    participants = await EventService.list_participants(db=db, event_id=event_id)
+    participants, total = await EventService.list_participants(
+        db=db, 
+        event_id=event_id,
+        skip=pagination.skip,
+        limit=pagination.limit
+    )
     
     participant_responses = []
     for p in participants:
@@ -146,9 +152,12 @@ async def list_participants(
             )
         )
     
-    return success_response(
+    return paginated_response(
         message="Participants retrieved successfully",
-        data=participant_responses
+        data=participant_responses,
+        total=total,
+        skip=pagination.skip,
+        limit=pagination.limit
     )
 
 

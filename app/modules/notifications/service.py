@@ -99,11 +99,22 @@ class NotificationService:
         user_id: uuid.UUID,
         skip: int = 0,
         limit: int = 20
-    ) -> List[Notification]:
+    ) -> tuple[List[Notification], int]:
         """
-        Get notifications for current user.
+        Get notifications for current user with pagination.
         Exclude deleted. Order by newest first.
         """
+        # Count total
+        count_query = select(func.count()).select_from(Notification).where(
+            and_(
+                Notification.receiver_id == user_id,
+                Notification.deleted_at.is_(None)
+            )
+        )
+        total_result = await db.execute(count_query)
+        total = total_result.scalar_one()
+
+        # List with pagination
         query = select(Notification).where(
             and_(
                 Notification.receiver_id == user_id,
@@ -112,7 +123,9 @@ class NotificationService:
         ).order_by(desc(Notification.created_at)).offset(skip).limit(limit)
         
         result = await db.execute(query)
-        return result.scalars().all()
+        notifications = result.scalars().all()
+        
+        return notifications, total
 
     @staticmethod
     async def mark_as_read(
@@ -138,7 +151,7 @@ class NotificationService:
             raise NotFoundException(detail="Notification not found")
         
         if notification.is_read:
-            return notification # Idempotent
+            return notification 
 
         notification.is_read = True
         await db.commit()

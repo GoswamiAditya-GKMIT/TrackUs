@@ -383,24 +383,34 @@ class EventService:
     @staticmethod
     async def list_participants(
         db: AsyncSession,
-        event_id: uuid.UUID
-    ) -> Sequence[EventParticipant]:
+        event_id: uuid.UUID,
+        skip: int = 0,
+        limit: int = 20
+    ) -> tuple[Sequence[EventParticipant], int]:
         """
-        List all participants for an event.
+        List all participants for an event with pagination.
         """
+        # Count total
+        count_query = select(func.count()).select_from(EventParticipant).where(
+            EventParticipant.event_id == event_id
+        )
+        total_result = await db.execute(count_query)
+        total = total_result.scalar_one()
+
+        # List with pagination
         query = select(EventParticipant).options(
             selectinload(EventParticipant.user),
             selectinload(EventParticipant.event)
         ).where(
             EventParticipant.event_id == event_id
-        ).order_by(EventParticipant.created_at.asc())
+        ).order_by(EventParticipant.created_at.asc()).offset(skip).limit(limit)
         
         result = await db.execute(query)
         participants = result.scalars().all()
         
         logger.info(f"Listed {len(participants)} participants for event {event_id}")
         
-        return participants
+        return participants, total
     
     @staticmethod
     async def _get_participant(

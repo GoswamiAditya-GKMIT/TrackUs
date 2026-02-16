@@ -9,7 +9,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.db.session import get_db
 from app.dependencies.auth import get_current_user
 from app.modules.users.model import User
-from app.common.responses import SuccessResponse
+from app.common.responses import SuccessResponse, PaginatedResponse
+from app.common.response_utils import paginated_response, success_response
+from app.dependencies.common import PaginationParams
 
 from app.modules.notifications.schema import (
     NotificationResponse,
@@ -25,12 +27,11 @@ router = APIRouter(
 
 @router.get(
     "",
-    response_model=SuccessResponse[List[NotificationResponse]],
+    response_model=PaginatedResponse[NotificationResponse],
     summary="List my notifications"
 )
 async def list_my_notifications(
-    skip: int = Query(0, ge=0),
-    limit: int = Query(20, ge=1, le=100),
+    pagination: PaginationParams = Depends(),
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
@@ -38,13 +39,20 @@ async def list_my_notifications(
     Get notifications for the current user.
     Newest first.
     """
-    notifications = await NotificationService.get_my_notifications(
+    notifications, total = await NotificationService.get_my_notifications(
         db, 
         user_id=current_user.id,
-        skip=skip,
-        limit=limit
+        skip=pagination.skip,
+        limit=pagination.limit
     )
-    return SuccessResponse(message="Notifications retrieved successfully", data=notifications)
+    
+    return paginated_response(
+        message="Notifications retrieved successfully",
+        data=[NotificationResponse.model_validate(n) for n in notifications],
+        total=total,
+        skip=pagination.skip,
+        limit=pagination.limit
+    )
 
 @router.get(
     "/unread-count",
