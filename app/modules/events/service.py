@@ -132,7 +132,8 @@ class EventService:
         query = select(TravelEvent).options(
             selectinload(TravelEvent.creator),
             selectinload(TravelEvent.group),
-            selectinload(TravelEvent.tenant)
+            selectinload(TravelEvent.tenant),
+            selectinload(TravelEvent.participants)
         ).where(TravelEvent.id == event.id)
         
         result = await db.execute(query)
@@ -186,7 +187,8 @@ class EventService:
         
         query = select(TravelEvent).options(
             selectinload(TravelEvent.creator),
-            selectinload(TravelEvent.group)
+            selectinload(TravelEvent.group),
+            selectinload(TravelEvent.participants)
         ).where(
             and_(
                 TravelEvent.group_id == group_id,
@@ -217,7 +219,8 @@ class EventService:
         query = select(TravelEvent).options(
             selectinload(TravelEvent.creator),
             selectinload(TravelEvent.group),
-            selectinload(TravelEvent.tenant)
+            selectinload(TravelEvent.tenant),
+            selectinload(TravelEvent.participants)
         ).where(
             and_(
                 TravelEvent.id == event_id,
@@ -266,7 +269,8 @@ class EventService:
         """
         # Fetch event with group to check permissions
         query = select(TravelEvent).options(
-            selectinload(TravelEvent.group).selectinload(Group.members)
+            selectinload(TravelEvent.group).selectinload(Group.members),
+            selectinload(TravelEvent.participants)
         ).where(
             and_(
                 TravelEvent.id == event_id,
@@ -609,6 +613,12 @@ class EventService:
         db.add(participant)
         await db.commit()
         await db.refresh(participant)
+        
+        query = select(EventParticipant).options(
+            selectinload(EventParticipant.user)
+        ).where(EventParticipant.id == participant.id)
+        result = await db.execute(query)
+        participant = result.scalar_one()
         
         logger.info(f"User {target_user_id} added to event {event_id} by admin")
         

@@ -138,23 +138,9 @@ async def list_participants(
         limit=pagination.limit
     )
     
-    participant_responses = []
-    for p in participants:
-        participant_responses.append(
-            ParticipantResponse(
-                id=p.id,
-                user_id=p.user_id,
-                user_name=p.user_name,
-                user_email=p.user_email,
-                status=p.status,
-                responded_at=p.responded_at,
-                created_at=p.created_at
-            )
-        )
-    
     return paginated_response(
         message="Participants retrieved successfully",
-        data=participant_responses,
+        data=[ParticipantResponse.model_validate(p) for p in participants],
         total=total,
         skip=pagination.skip,
         limit=pagination.limit
@@ -185,15 +171,7 @@ async def accept_invitation(
     
     return success_response(
         message="Invitation accepted successfully",
-        data=ParticipantResponse(
-            id=participant.id,
-            user_id=participant.user_id,
-            user_name=participant.user_name,
-            user_email=participant.user_email,
-            status=participant.status,
-            responded_at=participant.responded_at,
-            created_at=participant.created_at
-        )
+        data=ParticipantResponse.model_validate(participant)
     )
 
 
@@ -221,15 +199,7 @@ async def reject_invitation(
     
     return success_response(
         message="Invitation rejected successfully",
-        data=ParticipantResponse(
-            id=participant.id,
-            user_id=participant.user_id,
-            user_name=participant.user_name,
-            user_email=participant.user_email,
-            status=participant.status,
-            responded_at=participant.responded_at,
-            created_at=participant.created_at
-        )
+        data=ParticipantResponse.model_validate(participant)
     )
 
 
@@ -257,15 +227,7 @@ async def leave_event(
     
     return success_response(
         message="You have left the event",
-        data=ParticipantResponse(
-            id=participant.id,
-            user_id=participant.user_id,
-            user_name=participant.user_name,
-            user_email=participant.user_email,
-            status=participant.status,
-            responded_at=participant.responded_at,
-            created_at=participant.created_at
-        )
+        data=ParticipantResponse.model_validate(participant)
     )
 
 
@@ -295,15 +257,7 @@ async def add_participant(
     
     return success_response(
         message="Participant added successfully",
-        data=ParticipantResponse(
-            id=participant.id,
-            user_id=participant.user_id,
-            user_name=participant.user_name,
-            user_email=participant.user_email,
-            status=participant.status,
-            responded_at=participant.responded_at,
-            created_at=participant.created_at
-        )
+        data=ParticipantResponse.model_validate(participant)
     )
 
 

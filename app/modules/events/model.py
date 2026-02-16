@@ -105,6 +105,13 @@ class TravelEvent(Base, UUIDMixin, TimestampMixin, SoftDeleteMixin):
         """Get creator's full name."""
         return self.creator.full_name if self.creator else None
 
+    @property
+    def participant_count(self) -> int:
+        """Count of accepted participants."""
+        if 'participants' not in self.__dict__:
+            return 0
+        return sum(1 for p in self.participants if p.status == ParticipantStatus.ACCEPTED)
+
     def __repr__(self) -> str:
         return f"<TravelEvent(id={self.id}, name={self.name}, destination={self.destination})>"
 
