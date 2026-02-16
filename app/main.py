@@ -143,7 +143,7 @@ app.add_api_websocket_route("/chat/groups/{group_id}", chat_socket_handler)
 app.add_api_websocket_route("/chat/events/{event_id}", event_chat_socket_handler)
 app.add_api_websocket_route("/events/{event_id}/location", location_socket_handler)
 
-app.add_api_websocket_route("/ws/notifications", notification_socket_handler)
+app.add_api_websocket_route("/notifications", notification_socket_handler)
 
 
 @app.get("/health", tags=["health"])

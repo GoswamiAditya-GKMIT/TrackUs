@@ -9,7 +9,7 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
-@router.websocket("/ws/notifications")
+@router.websocket("/notifications")
 async def notification_socket_handler(
     websocket: WebSocket,
     token: str = Query(...)
