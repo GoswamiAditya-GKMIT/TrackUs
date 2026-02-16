@@ -42,7 +42,7 @@ from app.modules.chat.router import router as chat_router
 from app.modules.events.router import router as events_router
 from app.realtime.pubsub import pubsub_manager
 from app.realtime.manager import manager
-from app.realtime.chat import chat_socket_handler
+from app.realtime.chat import chat_socket_handler, event_chat_socket_handler
 
 logging.basicConfig(
     level=logging.INFO,
@@ -133,6 +133,7 @@ app.include_router(chat_router, prefix="/api/v1")
 app.include_router(events_router, prefix="/api/v1")
 
 app.add_api_websocket_route("/chat/groups/{group_id}", chat_socket_handler)
+app.add_api_websocket_route("/chat/events/{event_id}", event_chat_socket_handler)
 
 
 @app.get("/health", tags=["health"])
