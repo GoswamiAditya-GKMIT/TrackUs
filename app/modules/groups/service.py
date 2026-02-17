@@ -227,6 +227,35 @@ class GroupService:
         """
         group = await GroupService.get_group(db, group_id, user)
         group.soft_delete()
+        
+        await db.execute(
+            update(GroupMember)
+            .where(GroupMember.group_id == group_id, GroupMember.left_at.is_(None))
+            .values(left_at=datetime.now(timezone.utc))
+        )
+        
+        from app.modules.events.model import TravelEvent
+        await db.execute(
+            update(TravelEvent)
+            .where(TravelEvent.group_id == group_id, TravelEvent.deleted_at.is_(None))
+            .values(deleted_at=datetime.now(timezone.utc))
+        )
+     
+        
+        from app.modules.events.model import EventParticipant
+        from app.common.enums import ParticipantStatus
+        
+        event_ids_query = select(TravelEvent.id).where(TravelEvent.group_id == group_id)
+        event_ids_result = await db.execute(event_ids_query)
+        event_ids = [r for r in event_ids_result.scalars().all()]
+        
+        if event_ids:
+            await db.execute(
+                update(EventParticipant)
+                .where(EventParticipant.event_id.in_(event_ids), EventParticipant.status != ParticipantStatus.LEFT)
+                .values(status=ParticipantStatus.LEFT, responded_at=datetime.now(timezone.utc))
+            )
+        
         await db.commit()
         logger.info(f"Group {group_id} soft-deleted by user {user.id}")
 

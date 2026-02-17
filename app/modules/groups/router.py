@@ -157,10 +157,10 @@ async def delete_group(
 async def list_members(
     pagination: PaginationParams = Depends(),
     db: AsyncSession = Depends(get_db),
-    membership: GroupMember = Depends(require_group_member)
+    group: Group = Depends(require_group_access)
 ):
     members, total = await MembershipService.list_members(
-        db, membership.group_id, pagination.skip, pagination.limit
+        db, group.id, pagination.skip, pagination.limit
     )
     return paginated_response(
         message="Members retrieved successfully",
@@ -180,13 +180,14 @@ async def list_members(
 async def add_member(
     member_data: GroupMemberCreate,
     db: AsyncSession = Depends(get_db),
-    membership: GroupMember = Depends(require_group_admin)
+    group_ctx: tuple[Group, User] = Depends(require_group_manager)
 ):
+    group, acting_user = group_ctx
     membership = await MembershipService.add_member(
         db, 
-        membership.group_id, 
+        group.id, 
         member_data, 
-        membership.user
+        acting_user
     )
     return success_response(
         message="Member added successfully",
@@ -203,14 +204,15 @@ async def update_member_role(
     user_id: uuid.UUID,
     update_data: GroupMemberUpdate,
     db: AsyncSession = Depends(get_db),
-    membership: GroupMember = Depends(require_group_admin)
+    group_ctx: tuple[Group, User] = Depends(require_group_manager)
 ):
+    group, acting_user = group_ctx
     membership = await MembershipService.promote_demote(
         db, 
-        membership.group_id, 
+        group.id, 
         user_id, 
         update_data, 
-        membership.user
+        acting_user
     )
     return success_response(
         message="Member role updated successfully",
@@ -226,13 +228,14 @@ async def update_member_role(
 async def remove_member(
     user_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
-    membership: GroupMember = Depends(require_group_admin)
+    group_ctx: tuple[Group, User] = Depends(require_group_manager)
 ):
+    group, acting_user = group_ctx
     await MembershipService.remove_member(
         db, 
-        membership.group_id, 
+        group.id, 
         user_id, 
-        membership.user
+        acting_user
     )
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 

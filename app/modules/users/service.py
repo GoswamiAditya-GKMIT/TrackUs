@@ -284,6 +284,42 @@ class UserService:
 
         user.is_active = False
         user.soft_delete()
+        
+        from app.modules.groups.model import GroupMember
+        from sqlalchemy import update
+        from datetime import datetime, timezone
+        
+        await db.execute(
+            update(GroupMember)
+            .where(GroupMember.user_id == user.id, GroupMember.left_at.is_(None))
+            .values(left_at=datetime.now(timezone.utc))
+        )
+        
+        from app.modules.events.model import EventParticipant
+        from app.common.enums import ParticipantStatus
+        
+        await db.execute(
+            update(EventParticipant)
+            .where(EventParticipant.user_id == user.id, EventParticipant.status != ParticipantStatus.LEFT)
+            .values(status=ParticipantStatus.LEFT, responded_at=datetime.now(timezone.utc))
+        )
+        
+        from app.modules.location.model import LiveLocation
+        
+        await db.execute(
+            update(LiveLocation)
+            .where(LiveLocation.user_id == user.id, LiveLocation.is_active == True)
+            .values(is_active=False, last_updated_at=datetime.now(timezone.utc))
+        )
+        
+        from app.modules.notifications.model import Notification
+        
+        await db.execute(
+            update(Notification)
+            .where(Notification.receiver_id == user.id, Notification.deleted_at.is_(None))
+            .values(deleted_at=datetime.now(timezone.utc))
+        )
+        
         await db.commit()
         
         if user.id == current_user.id:
