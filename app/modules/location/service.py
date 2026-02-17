@@ -185,7 +185,7 @@ class LocationService:
         # List with pagination
         query = base_query.options(
             selectinload(LiveLocation.user)
-        ).offset(skip).limit(limit)
+        ).order_by(LiveLocation.last_updated_at.desc()).offset(skip).limit(limit)
 
         result = await db.execute(query)
         locations = result.scalars().all()
