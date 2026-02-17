@@ -48,7 +48,7 @@ class AuthService:
         if not user:
             raise AuthenticationException(detail="Invalid email or password")
         
-        if not verify_password(password, user.hashed_password):
+        if not verify_password(password, user.password):
             raise AuthenticationException(detail="Invalid email or password")
         
         if not user.is_active:
@@ -281,7 +281,7 @@ class AuthService:
         
         # Update password
         from app.core.security import hash_password
-        user.hashed_password = hash_password(new_password)
+        user.password = hash_password(new_password)
         await db.commit()
         
         await AuthService.invalidate_user_tokens(redis_client, email)

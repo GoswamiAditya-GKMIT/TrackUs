@@ -78,7 +78,7 @@ class UserService:
         user = User(
             tenant_id=tenant_id,
             email=user_data.email,
-            hashed_password=hash_password(user_data.password),
+            password=hash_password(user_data.password),
             first_name=user_data.first_name,
             last_name=user_data.last_name,
             role=role,
