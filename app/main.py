@@ -13,6 +13,8 @@ from app.core.config import settings
 from app.db.base import import_models
 from app.db.session import async_engine
 from app.core.redis import init_redis, close_redis
+from fastapi_limiter import FastAPILimiter
+import redis.asyncio as redis
 
 from app.core.handlers import (
     http_exception_handler,
@@ -89,6 +91,13 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.warning(f"Failed to initialize Redis Pub/Sub: {e}. Running in local-only mode.")
 
+    if settings.RATE_LIMIT_ENABLED:
+        redis_conn = redis.from_url(settings.redis_url, encoding="utf-8", decode_responses=True)
+        await FastAPILimiter.init(redis_conn)
+        logger.info("FastAPI Rate Limiter initialized")
+    else:
+        logger.info("FastAPI Rate Limiter disabled by configuration")
+
     logger.info("Application startup complete")
 
     yield
@@ -146,14 +155,7 @@ app.add_api_websocket_route("/events/{event_id}/location", location_socket_handl
 app.add_api_websocket_route("/notifications", notification_socket_handler)
 
 
-@app.get("/health", tags=["health"])
-async def health_check():
-    """Health check endpoint."""
-    return {
-        "status": "healthy",
-        "app": settings.APP_NAME,
-        "version": settings.APP_VERSION
-    }
+
 
 
 @app.get("/", tags=["root"])

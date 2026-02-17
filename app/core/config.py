@@ -37,6 +37,9 @@ class Settings(BaseSettings):
     REDIS_PASSWORD: str
     REDIS_DB: int
     
+    # Rate Limiting
+    RATE_LIMIT_ENABLED: bool = True
+    
     @property
     def redis_url(self) -> str:
         if self.REDIS_PASSWORD:

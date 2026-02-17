@@ -4,6 +4,7 @@ Authentication router - HTTP endpoints for authentication.
 from fastapi import APIRouter, Depends, status
 from fastapi.security import HTTPAuthorizationCredentials
 from sqlalchemy.ext.asyncio import AsyncSession
+from app.core.rate_limiter import RateLimiter 
 
 from app.db.session import get_db
 from app.core.redis import get_redis
@@ -28,6 +29,11 @@ from datetime import datetime, timezone
 from app.core.security import decode_access_token, decode_refresh_token
 from app.modules.auth.blacklist_service import TokenBlacklistService
 from app.modules.users.service import UserService
+from app.common.constants import (
+    RATE_LIMIT_AUTH_TIMES,
+    RATE_LIMIT_AUTH_SECONDS,
+    RATE_LIMIT_REFRESH_TIMES
+)
 
 
 router = APIRouter(prefix="/auth", tags=["authentication"])
@@ -37,7 +43,8 @@ router = APIRouter(prefix="/auth", tags=["authentication"])
     "/login",
     response_model=SuccessResponse[TokenResponse],
     status_code=status.HTTP_200_OK,
-    summary="User login"
+    summary="User login",
+    dependencies=[Depends(RateLimiter(times=RATE_LIMIT_AUTH_TIMES, seconds=RATE_LIMIT_AUTH_SECONDS))]
 )
 async def login(
     login_data: LoginRequest,
@@ -57,7 +64,8 @@ async def login(
     "/refresh",
     response_model=SuccessResponse[TokenResponse],
     status_code=status.HTTP_200_OK,
-    summary="Refresh access token"
+    summary="Refresh access token",
+    dependencies=[Depends(RateLimiter(times=RATE_LIMIT_REFRESH_TIMES, seconds=RATE_LIMIT_AUTH_SECONDS))]
 )
 async def refresh_token(
     refresh_data: RefreshTokenRequest,
@@ -77,7 +85,8 @@ async def refresh_token(
 @router.post(
     "/email-verification/verify",
     response_model=SuccessResponse[dict],
-    summary="Verify user email"
+    summary="Verify user email",
+    dependencies=[Depends(RateLimiter(times=RATE_LIMIT_AUTH_TIMES, seconds=RATE_LIMIT_AUTH_SECONDS))]
 )
 async def verify_email(
     verification_data: EmailVerificationRequest,
@@ -105,7 +114,8 @@ async def verify_email(
 @router.post(
     "/email-verification/resend",
     response_model=SuccessResponse[dict],
-    summary="Resend email verification link"
+    summary="Resend email verification link",
+    dependencies=[Depends(RateLimiter(times=RATE_LIMIT_AUTH_TIMES, seconds=RATE_LIMIT_AUTH_SECONDS))]
 )
 async def resend_verification(
     resend_data: ResendVerificationRequest,
@@ -195,7 +205,8 @@ async def logout(
 @router.post(
     "/forgot-password",
     response_model=SuccessResponse[dict],
-    summary="Request password reset"
+    summary="Request password reset",
+    dependencies=[Depends(RateLimiter(times=RATE_LIMIT_AUTH_TIMES, seconds=RATE_LIMIT_AUTH_SECONDS))]
 )
 async def forgot_password(
     request_data: ForgotPasswordRequest,
@@ -247,7 +258,8 @@ async def forgot_password(
 @router.post(
     "/reset-password",
     response_model=SuccessResponse[dict],
-    summary="Reset password"
+    summary="Reset password",
+    dependencies=[Depends(RateLimiter(times=RATE_LIMIT_AUTH_TIMES, seconds=RATE_LIMIT_AUTH_SECONDS))]
 )
 async def reset_password(
     reset_data: ResetPasswordRequest,

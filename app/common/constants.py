@@ -25,3 +25,8 @@ class ReferenceType:
     EVENT = "event"
     GROUP = "group"
     USER = "user"
+
+# Rate Limit Constants
+RATE_LIMIT_AUTH_TIMES = 5
+RATE_LIMIT_AUTH_SECONDS = 60
+RATE_LIMIT_REFRESH_TIMES = 10
