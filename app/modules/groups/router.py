@@ -2,9 +2,11 @@
 Group router - HTTP endpoints for groups and memberships.
 """
 import uuid
-from typing import Sequence
+from typing import Sequence, Optional, Union
 
 from fastapi import APIRouter, Depends, status
+from fastapi.responses import JSONResponse
+from fastapi.encoders import jsonable_encoder
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import get_db
@@ -16,7 +18,9 @@ from app.modules.groups.schema import (
     GroupCreate, 
     GroupUpdate, 
     GroupResponse, 
+    GroupAdminResponse,
     GroupDetailResponse,
+    GroupDetailAdminResponse,
     GroupMemberResponse,
     GroupMemberCreate,
     GroupMemberUpdate
@@ -57,44 +61,56 @@ async def create_group(
 
 @router.get(
     "",
-    response_model=PaginatedResponse[GroupResponse],
+    response_model=PaginatedResponse[Union[GroupAdminResponse, GroupResponse]],
     summary="List groups"
 )
 async def list_groups(
     pagination: PaginationParams = Depends(),
+    active: Optional[bool] = None,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
     if current_user.role == UserRole.TENANT_ADMIN:
         groups, total = await GroupService.list_tenant_groups(
-            db, current_user.tenant_id, pagination.skip, pagination.limit
+            db, current_user.tenant_id, pagination.skip, pagination.limit, active
         )
+        data = [GroupAdminResponse.model_validate(g) for g in groups]
     else:
+        # Regular users only see their active groups
         groups, total = await GroupService.list_user_groups(
             db, current_user, pagination.skip, pagination.limit
         )
+        data = [GroupResponse.model_validate(g) for g in groups]
     
-    return paginated_response(
+    response_data = paginated_response(
         message="Groups retrieved successfully",
-        data=[GroupResponse.model_validate(g) for g in groups],
+        data=data,
         total=total,
         skip=pagination.skip,
         limit=pagination.limit
     )
+    return JSONResponse(content=jsonable_encoder(response_data))
 
 
 @router.get(
     "/{group_id}",
-    response_model=SuccessResponse[GroupDetailResponse],
+    response_model=SuccessResponse[Union[GroupDetailAdminResponse, GroupDetailResponse]],
     summary="Get group details"
 )
 async def get_group(
-    group = Depends(require_group_access)
+    group = Depends(require_group_access),
+    current_user: User = Depends(get_current_user)
 ):
-    return success_response(
+    if current_user.role == UserRole.TENANT_ADMIN:
+        data = GroupDetailAdminResponse.model_validate(group)
+    else:
+        data = GroupDetailResponse.model_validate(group)
+
+    response_data = success_response(
         message="Group details retrieved successfully",
-        data=GroupDetailResponse.model_validate(group)
+        data=data
     )
+    return JSONResponse(content=jsonable_encoder(response_data))
 
 
 @router.patch(
