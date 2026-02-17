@@ -45,7 +45,7 @@ class TenantIsolationException(HTTPException):
     
     def __init__(self, detail: str = "Access denied: tenant isolation violation"):
         super().__init__(
-            status_code=status.HTTP_403_FORBIDDEN,
+            status_code=status.HTTP_404_NOT_FOUND,
             detail=detail,
         )
 

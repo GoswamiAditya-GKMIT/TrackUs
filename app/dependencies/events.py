@@ -11,7 +11,7 @@ from app.modules.users.model import User
 from app.modules.events.model import TravelEvent
 from app.modules.groups.model import GroupMember
 from app.core.exceptions import NotFoundException, PermissionDeniedException
-from app.common.enums import GroupMemberRole
+from app.common.enums import GroupMemberRole, UserRole
 
 
 async def _get_group_member(
@@ -62,6 +62,9 @@ async def get_accessible_event(
     if not event:
         raise NotFoundException(detail="Event not found")
     
+    if current_user.tenant_id and event.tenant_id != current_user.tenant_id:
+        raise NotFoundException(detail="Event not found")
+    
     # Check if user is a member of the event's group
     member = await _get_group_member(db, event.group_id, current_user.id)
     
@@ -93,6 +96,9 @@ async def require_event_admin(
     event = result.scalar_one_or_none()
     
     if not event:
+        raise NotFoundException(detail="Event not found")
+    
+    if current_user.tenant_id and event.tenant_id != current_user.tenant_id:
         raise NotFoundException(detail="Event not found")
     
     member = await _get_group_member(db, event.group_id, current_user.id)

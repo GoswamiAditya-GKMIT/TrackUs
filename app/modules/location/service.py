@@ -13,6 +13,7 @@ from sqlalchemy.orm import selectinload
 from app.modules.location.model import LiveLocation
 from app.modules.location.schema import LocationUpdate
 from app.modules.events.model import TravelEvent, EventParticipant
+from app.modules.users.model import User
 from app.common.enums import EventStatus, ParticipantStatus
 from app.core.exceptions import (
     NotFoundException,
@@ -20,6 +21,8 @@ from app.core.exceptions import (
     BadRequestException
 )
 from app.realtime.manager import manager
+from app.common.enums import UserRole
+
 
 logger = logging.getLogger(__name__)
 
@@ -43,6 +46,16 @@ class LocationService:
         event = result.scalar_one_or_none()
 
         if not event:
+            raise NotFoundException(detail="Event not found")
+
+        user_query = select(User).where(User.id == user_id)
+        u_result = await db.execute(user_query)
+        user = u_result.scalar_one_or_none()
+        
+        if not user:
+             raise NotFoundException(detail="User not found")
+             
+        if user.tenant_id and event.tenant_id != user.tenant_id:
             raise NotFoundException(detail="Event not found")
 
         if event.status != EventStatus.ONGOING:

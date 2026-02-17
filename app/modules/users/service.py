@@ -192,11 +192,13 @@ class UserService:
         if current_user.role == UserRole.SUPER_ADMIN:
             query = query.where(User.role == UserRole.TENANT_ADMIN)
             
-        elif current_user.role in [UserRole.TENANT_ADMIN, UserRole.USER]:
+        elif current_user.role == UserRole.TENANT_ADMIN:
             query = query.where(
                 User.tenant_id == current_user.tenant_id,
                 User.role == UserRole.USER
             )
+        else:
+            raise PermissionDeniedException(detail="PERMISSION_DENIED")
         
         if is_active is not None:
             query = query.where(User.is_active == is_active)

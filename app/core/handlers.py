@@ -101,10 +101,10 @@ async def not_found_exception_handler(request: Request, exc: NotFoundException) 
 
 async def tenant_isolation_exception_handler(request: Request, exc: TenantIsolationException) -> JSONResponse:
     return JSONResponse(
-        status_code=status.HTTP_403_FORBIDDEN,
+        status_code=status.HTTP_404_NOT_FOUND,
         content={
             "status": "error",
-            "message": "TENANT_ISOLATION_VIOLATION",
+            "message": "RESOURCE_NOT_FOUND",
             "error": {
                 "details": exc.detail
             }
