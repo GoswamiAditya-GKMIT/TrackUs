@@ -95,6 +95,16 @@ class GroupService:
         if group.tenant_id != user.tenant_id:
             raise TenantIsolationException()
 
+        # Count members
+        count_query = select(func.count()).select_from(GroupMember).where(
+            and_(
+                GroupMember.group_id == group_id,
+                GroupMember.left_at.is_(None)
+            )
+        )
+        member_count = (await db.execute(count_query)).scalar()
+        group.member_count = member_count
+
         return group
 
     @staticmethod
@@ -123,24 +133,40 @@ class GroupService:
         # Data
         query = base_query.offset(skip).limit(limit).order_by(Group.created_at.desc())
         result = await db.execute(query)
-        return result.scalars().all(), total
+        groups = result.scalars().all()
+        
+        # Populate member counts
+        for group in groups:
+            count_query = select(func.count()).select_from(GroupMember).where(
+                and_(
+                    GroupMember.group_id == group.id,
+                    GroupMember.left_at.is_(None)
+                )
+            )
+            group.member_count = (await db.execute(count_query)).scalar()
+            
+        return groups, total
 
     @staticmethod
     async def list_tenant_groups(
         db: AsyncSession,
         tenant_id: uuid.UUID,
         skip: int = 0,
-        limit: int = 100
+        limit: int = 100,
+        active: Optional[bool] = None
     ) -> tuple[Sequence[Group], int]:
         """
         List all groups in a tenant (for admins).
         """
         base_query = select(Group).where(
-            and_(
-                Group.tenant_id == tenant_id,
-                Group.deleted_at == None
-            )
+            Group.tenant_id == tenant_id
         )
+        
+        if active is True:
+            base_query = base_query.where(Group.deleted_at.is_(None))
+        elif active is False:
+            base_query = base_query.where(Group.deleted_at.is_not(None))
+        # If active is None, return all (no filter on deleted_at)
 
         # Count
         count_query = select(func.count()).select_from(base_query.subquery())
@@ -150,7 +176,18 @@ class GroupService:
         # Data
         query = base_query.offset(skip).limit(limit).order_by(Group.created_at.desc())
         result = await db.execute(query)
-        return result.scalars().all(), total
+        groups = result.scalars().all()
+        
+        for group in groups:
+            count_query = select(func.count()).select_from(GroupMember).where(
+                and_(
+                    GroupMember.group_id == group.id,
+                    GroupMember.left_at.is_(None)
+                )
+            )
+            group.member_count = (await db.execute(count_query)).scalar()
+
+        return groups, total
 
     @staticmethod
     async def update_group(

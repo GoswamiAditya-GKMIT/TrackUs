@@ -28,11 +28,16 @@ class GroupResponse(GroupBase):
     tenant_id: uuid.UUID
     created_by: Optional[uuid.UUID]
     is_active: bool
+    member_count: int = 0
     created_at: datetime
     updated_at: datetime
 
     class Config:
         from_attributes = True
+
+
+class GroupAdminResponse(GroupResponse):
+    deleted_at: Optional[datetime] = None
 
 
 class GroupMemberBase(BaseSchema):
@@ -61,4 +66,8 @@ class GroupMemberResponse(GroupMemberBase):
 
 
 class GroupDetailResponse(GroupResponse):
-    members: list[GroupMemberResponse] = []
+    pass
+
+
+class GroupDetailAdminResponse(GroupAdminResponse):
+    pass
