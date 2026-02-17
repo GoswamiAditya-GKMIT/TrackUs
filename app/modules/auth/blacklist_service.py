@@ -6,16 +6,30 @@ from sqlalchemy import select, delete
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.modules.auth.model import TokenBlacklist
+import redis.asyncio as redis
 
 
 class TokenBlacklistService:
     """Service for managing token blacklist."""
     
     @staticmethod
-    async def is_token_blacklisted(db: AsyncSession, jti: str) -> bool:
+    async def is_token_blacklisted(
+        db: AsyncSession, 
+        jti: str, 
+        token_type: str = "access",
+        redis_client: Optional[redis.Redis] = None
+    ) -> bool:
         """
         Check if a token is blacklisted.
+        - Access tokens: Check Redis.
+        - Refresh tokens: Check DB.
         """
+        if token_type == "access" and redis_client:
+            key = f"blacklist:access:{jti}"
+            is_blacklisted = await redis_client.get(key)
+            return is_blacklisted is not None
+
+        # Check DB (Refresh tokens or fallback)
         result = await db.execute(
             select(TokenBlacklist).where(TokenBlacklist.jti == jti)
         )
@@ -28,11 +42,24 @@ class TokenBlacklistService:
         user_id: uuid.UUID,
         token_type: str,
         expires_at: datetime,
-        reason: Optional[str] = None
-    ) -> TokenBlacklist:
+        reason: Optional[str] = None,
+        redis_client: Optional[redis.Redis] = None
+    ) -> Optional[TokenBlacklist]:
         """
         Add a token to the blacklist.
+        - Access tokens are stored in Redis with TTL.
+        - Refresh tokens are stored in Database (persistent).
         """
+        if token_type == "access" and redis_client:
+            #Calculate TTL
+            now = datetime.now(timezone.utc)
+            ttl = int((expires_at - now).total_seconds())
+            
+            if ttl > 0:
+                key = f"blacklist:access:{jti}"
+                await redis_client.set(key, "revoked", ex=ttl)
+            return None
+
         blacklist_entry = TokenBlacklist(
             jti=jti,
             user_id=user_id,

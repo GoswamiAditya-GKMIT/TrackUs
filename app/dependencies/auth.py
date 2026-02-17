@@ -8,6 +8,7 @@ from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import get_db
+from app.core.redis import get_redis
 from app.modules.users.model import User
 from app.core.security import decode_access_token
 from app.core.exceptions import AuthenticationException
@@ -25,7 +26,8 @@ security = HTTPBearer(
 
 async def get_current_user(
     credentials: HTTPAuthorizationCredentials = Depends(security),
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    redis_client = Depends(get_redis)
 ) -> User:
     """
     Get the currently authenticated user from JWT token.
@@ -44,7 +46,12 @@ async def get_current_user(
     
     jti = payload.get("jti")
     if jti:
-        is_blacklisted = await TokenBlacklistService.is_token_blacklisted(db, jti)
+        is_blacklisted = await TokenBlacklistService.is_token_blacklisted(
+            db, 
+            jti, 
+            token_type="access", 
+            redis_client=redis_client
+        )
         if is_blacklisted:
             raise AuthenticationException(detail="Token has been revoked")
     

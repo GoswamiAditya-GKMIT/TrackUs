@@ -150,7 +150,8 @@ async def logout(
     logout_data: LogoutRequest = None,
     credentials: HTTPAuthorizationCredentials = Depends(security),
     current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    redis_client = Depends(get_redis)
 ):
     token = credentials.credentials
     payload = decode_access_token(token)
@@ -167,17 +168,18 @@ async def logout(
     # Convert exp timestamp to datetime
     expires_at = datetime.fromtimestamp(exp, tz=timezone.utc)
     
-    # Add token to blacklist
+    # Add access token to blacklist (Redis)
     await TokenBlacklistService.blacklist_token(
         db=db,
         jti=jti,
         user_id=current_user.id,
         token_type="access",
         expires_at=expires_at,
-        reason="logout"
+        reason="logout",
+        redis_client=redis_client
     )
     
-    # Also blacklist refresh token if provided
+    # Also blacklist refresh token if provided (DB)
     if logout_data and logout_data.refresh_token:
         refresh_payload = decode_refresh_token(logout_data.refresh_token)
         if refresh_payload:
