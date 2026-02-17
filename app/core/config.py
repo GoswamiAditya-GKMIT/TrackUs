@@ -40,6 +40,12 @@ class Settings(BaseSettings):
     # Rate Limiting
     RATE_LIMIT_ENABLED: bool = True
     
+    # Frontend Settings
+    FRONTEND_URL: str = "http://localhost:3000"
+    
+    # Realtime Settings
+    REDIS_PUBSUB_TIMEOUT: float = 1.0
+    
     @property
     def redis_url(self) -> str:
         if self.REDIS_PASSWORD:

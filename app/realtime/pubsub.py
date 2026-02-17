@@ -111,7 +111,7 @@ class RedisPubSubManager:
                 try:
                     message = await self._pubsub.get_message(
                         ignore_subscribe_messages=True,
-                        timeout=1.0
+                        timeout=settings.REDIS_PUBSUB_TIMEOUT
                     )
                     
                     if message and message["type"] == "pmessage":
@@ -140,7 +140,6 @@ class RedisPubSubManager:
             channel = message["channel"]
             data = json.loads(message["data"])
             
-            # Find matching handler
             handler = self._message_handlers.get(pattern)
             if handler:
                 await handler(channel, data)
