@@ -1,14 +1,12 @@
 """
 Chat Pydantic schemas.
 """
-from datetime import datetime
 from typing import Optional
 import uuid
 
 from pydantic import Field
 from app.common.schemas import BaseSchema
 from app.common.enums import MessageType
-from app.modules.users.schema import UserResponse
 
 
 class ChatMessageBase(BaseSchema):

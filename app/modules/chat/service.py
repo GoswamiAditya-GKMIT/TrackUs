@@ -1,8 +1,8 @@
 import logging
-from typing import Sequence, Optional
+from typing import Sequence
 import uuid
 
-from sqlalchemy import select, func, and_
+from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 

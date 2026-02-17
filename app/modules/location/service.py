@@ -6,7 +6,7 @@ from datetime import datetime, timezone
 import uuid
 from typing import Sequence, Optional
 
-from sqlalchemy import select, and_, update, func
+from sqlalchemy import select, and_, func
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -17,11 +17,9 @@ from app.modules.users.model import User
 from app.common.enums import EventStatus, ParticipantStatus
 from app.core.exceptions import (
     NotFoundException,
-    PermissionDeniedException,
-    BadRequestException
+    PermissionDeniedException
 )
 from app.realtime.manager import manager
-from app.common.enums import UserRole
 
 
 logger = logging.getLogger(__name__)

@@ -1,8 +1,7 @@
 
 import uuid
-from typing import Optional
-
-from fastapi import APIRouter, Depends, status, Query
+import uuid
+from fastapi import APIRouter, Depends, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import get_db
@@ -45,7 +44,7 @@ async def send_message(
     try:
         payload = ChatService.get_broadcast_payload(message)
         await manager.broadcast(str(group_id), payload)
-    except Exception as e:
+    except Exception:
         pass
         
     return success_response(
@@ -112,7 +111,7 @@ async def send_event_message(
     try:
         payload = EventChatService.get_broadcast_payload(message)
         await manager.broadcast(str(event_id), payload)
-    except Exception as e:
+    except Exception:
         pass
         
     return success_response(

@@ -2,10 +2,10 @@
 Live Location model.
 """
 from datetime import datetime
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING
 import uuid
 
-from sqlalchemy import Boolean, ForeignKey, Float, DateTime, Index, UniqueConstraint
+from sqlalchemy import Boolean, ForeignKey, Float, DateTime, UniqueConstraint
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 

@@ -2,10 +2,9 @@
 Live Location Router.
 """
 import uuid
-from datetime import datetime
-from typing import List
+import uuid
 
-from fastapi import APIRouter, Depends, Query, status
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import PermissionDeniedException, NotFoundException

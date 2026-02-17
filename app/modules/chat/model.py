@@ -1,11 +1,10 @@
 """
 GroupMessage model for storing chat history.
 """
-from datetime import datetime
 from typing import TYPE_CHECKING, Optional
 import uuid
 
-from sqlalchemy import String, Text, ForeignKey, ForeignKeyConstraint, Enum as SQLEnum
+from sqlalchemy import Text, ForeignKey, Enum as SQLEnum
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 

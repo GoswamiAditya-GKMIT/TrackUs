@@ -11,7 +11,7 @@ from app.modules.users.model import User
 from app.modules.events.model import TravelEvent
 from app.modules.groups.model import GroupMember
 from app.core.exceptions import NotFoundException, PermissionDeniedException
-from app.common.enums import GroupMemberRole, UserRole
+from app.common.enums import GroupMemberRole
 
 
 async def _get_group_member(

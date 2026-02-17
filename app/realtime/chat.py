@@ -4,7 +4,10 @@ WebSocket handlers for group chat.
 import json
 import logging
 import uuid
-from typing import Optional
+from typing import Optional, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from app.modules.users.model import User
 
 from fastapi import WebSocket, WebSocketDisconnect, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession

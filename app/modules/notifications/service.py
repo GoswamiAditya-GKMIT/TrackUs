@@ -1,15 +1,15 @@
 """
 Notification Service.
 """
-from typing import List, Optional
+from typing import List
 import uuid
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func, and_, desc, update
+from sqlalchemy import select, func, and_, desc
 
 from app.modules.notifications.model import Notification
-from app.modules.notifications.schema import NotificationCreate, NotificationUpdate
-from app.common.constants import NotificationType, ReferenceType
-from app.core.exceptions import NotFoundException, BadRequestException
+from app.modules.notifications.schema import NotificationCreate
+from app.common.constants import NotificationType
+from app.core.exceptions import NotFoundException
 from datetime import datetime, timezone
 
 class NotificationService:

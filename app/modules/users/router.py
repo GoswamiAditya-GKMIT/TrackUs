@@ -1,9 +1,9 @@
 """
 User router - HTTP endpoints for user operations.
 """
-import uuid
-from typing import Optional
 
+from typing import Optional
+from typing import Optional
 from fastapi import APIRouter, Depends, status, BackgroundTasks, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -22,8 +22,6 @@ from app.dependencies.auth import get_current_user, require_admin
 from app.dependencies.users import (
     TargetUserValidator
 )
-from app.common.enums import UserRole
-from app.core.exceptions import PermissionDeniedException
 from app.common.response_utils import success_response, paginated_response
 from app.common.responses import SuccessResponse, PaginatedResponse
 from fastapi import Response

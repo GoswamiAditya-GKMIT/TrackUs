@@ -4,6 +4,7 @@ Generates fake GPS movement for testing.
 """
 import asyncio
 import logging
+from datetime import datetime, timezone
 import random
 import uuid
 from typing import Dict, Optional

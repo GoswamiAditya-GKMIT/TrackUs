@@ -1,7 +1,7 @@
 """
 Travel Event model.
 """
-from datetime import datetime, timezone
+from datetime import datetime
 from typing import TYPE_CHECKING, Optional
 import uuid
 

@@ -1,9 +1,9 @@
 """
 Tenant router - HTTP endpoints for tenant operations.
 """
-import uuid
-from typing import Optional
 
+from typing import Optional
+from typing import Optional
 from fastapi import APIRouter, Depends, status, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 

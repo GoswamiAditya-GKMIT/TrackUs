@@ -11,8 +11,7 @@ from app.common.enums import UserRole
 
 if TYPE_CHECKING:
     from app.modules.tenants.model import Tenant
-    from app.modules.auth.model import TokenBlacklist
-    from app.modules.notifications.model import Notification
+    from app.modules.tenants.model import Tenant
 
 
 class User(Base, UUIDMixin, TimestampMixin, SoftDeleteMixin):

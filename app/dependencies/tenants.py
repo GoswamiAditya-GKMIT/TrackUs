@@ -9,10 +9,9 @@ from sqlalchemy import select
 
 from app.db.session import get_db
 from app.modules.tenants.model import Tenant
-from app.dependencies.auth import get_current_user, require_super_admin
-from app.common.enums import UserRole
+from app.dependencies.auth import require_super_admin
 from app.modules.users.model import User
-from app.core.exceptions import NotFoundException, PermissionDeniedException
+from app.core.exceptions import NotFoundException
 
 
 async def get_tenant_or_404(

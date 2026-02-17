@@ -1,7 +1,7 @@
 """
 Standardized API response schemas.
 """
-from typing import Generic, TypeVar, Optional, Any, List
+from typing import Generic, TypeVar, Optional, List
 from pydantic import BaseModel, Field
 
 DataT = TypeVar('DataT')

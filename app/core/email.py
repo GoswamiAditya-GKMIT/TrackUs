@@ -2,8 +2,7 @@
 Email utilities for sending verification emails and managing tokens.
 """
 import logging
-from datetime import datetime, timedelta, timezone
-from typing import Optional
+
 import aiosmtplib
 from email.message import EmailMessage
 

@@ -3,7 +3,7 @@ Authentication dependencies for route protection.
 """
 import uuid
 
-from fastapi import Depends, HTTPException
+from fastapi import Depends
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.ext.asyncio import AsyncSession
 
