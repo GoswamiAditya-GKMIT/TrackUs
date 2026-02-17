@@ -2,7 +2,7 @@
 Notification Router.
 """
 from uuid import UUID
-from fastapi import APIRouter, Depends, Path, Body
+from fastapi import APIRouter, Depends, Path, Body, status, Response
 
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.db.session import get_db
@@ -93,6 +93,7 @@ async def mark_as_read(
 
 @router.delete(
     "/{notification_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
     summary="Delete notification"
 )
 async def delete_notification(
@@ -108,4 +109,4 @@ async def delete_notification(
         notification_id,
         current_user.id
     )
-    return SuccessResponse(message="Notification deleted")
+    return Response(status_code=status.HTTP_204_NO_CONTENT)

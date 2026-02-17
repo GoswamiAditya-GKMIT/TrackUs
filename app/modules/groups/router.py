@@ -4,7 +4,7 @@ Group router - HTTP endpoints for groups and memberships.
 import uuid
 from typing import Sequence, Optional, Union
 
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, status, Response
 from fastapi.responses import JSONResponse
 from fastapi.encoders import jsonable_encoder
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -134,7 +134,7 @@ async def update_group(
 
 @router.delete(
     "/{group_id}",
-    response_model=SuccessResponse[dict],
+    status_code=status.HTTP_204_NO_CONTENT,
     summary="Delete group"
 )
 async def delete_group(
@@ -143,10 +143,7 @@ async def delete_group(
 ):
     group, user = group_ctx
     await GroupService.delete_group(db, group.id, user)
-    return success_response(
-        message="Group deleted successfully",
-        data={}
-    )
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 # --- Membership Endpoints ---
@@ -223,7 +220,7 @@ async def update_member_role(
 
 @router.delete(
     "/{group_id}/members/{user_id}",
-    response_model=SuccessResponse[dict],
+    status_code=status.HTTP_204_NO_CONTENT,
     summary="Remove member from group"
 )
 async def remove_member(
@@ -237,10 +234,7 @@ async def remove_member(
         user_id, 
         membership.user
     )
-    return success_response(
-        message="Member removed successfully",
-        data={}
-    )
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @router.post(
