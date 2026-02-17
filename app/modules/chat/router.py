@@ -40,6 +40,14 @@ async def send_message(
     message = await ChatService.create_message(
         db, group_id, current_user, message_data
     )
+    
+    # Broadcast to WebSocket listeners
+    try:
+        payload = ChatService.get_broadcast_payload(message)
+        await manager.broadcast(str(group_id), payload)
+    except Exception as e:
+        pass
+        
     return success_response(
         message="Message sent successfully",
         data=ChatMessageResponse.model_validate(message)
