@@ -20,7 +20,6 @@ class ConnectionManager:
         """
         Register a new connection for a user in a group.
         """
-        await websocket.accept()
         if group_id not in self.active_connections:
             self.active_connections[group_id] = {}
         if user_id not in self.active_connections[group_id]:

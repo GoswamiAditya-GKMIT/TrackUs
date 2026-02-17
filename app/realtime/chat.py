@@ -63,6 +63,7 @@ async def chat_socket_handler(
     WebSocket handler for group chat.
     Path: /chat/groups/{group_id}
     """
+    await websocket.accept()
     user = await get_ws_user(token)
     if not user:
         await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
@@ -133,6 +134,7 @@ async def event_chat_socket_handler(
     WebSocket handler for event chat.
     Path: /chat/events/{event_id}
     """
+    await websocket.accept()
     user = await get_ws_user(token)
     if not user:
         await websocket.close(code=status.WS_1008_POLICY_VIOLATION)

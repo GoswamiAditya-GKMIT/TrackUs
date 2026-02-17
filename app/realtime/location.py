@@ -28,6 +28,7 @@ async def location_socket_handler(
     WebSocket handler for event live location.
     Path: /events/{event_id}/location
     """
+    await websocket.accept()
     user = await get_ws_user(token)
     if not user:
         await websocket.close(code=status.WS_1008_POLICY_VIOLATION)

@@ -18,6 +18,7 @@ async def notification_socket_handler(
     WebSocket endpoint for real-time notifications.
     Client connects to receive updates instantly.
     """
+    await websocket.accept()
     user = await get_ws_user(token)
     if not user:
         await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
