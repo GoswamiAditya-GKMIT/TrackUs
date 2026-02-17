@@ -41,4 +41,10 @@ class TenantResponse(BaseResponseSchema):
     name: str
     description: Optional[str]
     is_active: bool
+    user_count: int = 0
     deleted_at: Optional[datetime] = None
+
+
+class TenantDetailResponse(TenantResponse):
+    active_group_count: int = 0
+    active_event_count: int = 0

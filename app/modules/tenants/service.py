@@ -8,11 +8,48 @@ from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.modules.tenants.model import Tenant
+from app.modules.users.model import User
+from app.modules.groups.model import Group
+from app.modules.events.model import TravelEvent
+from app.modules.events.model import EventStatus
 from app.modules.tenants.schema import TenantCreate, TenantUpdate
 from app.core.exceptions import NotFoundException, BadRequestException
+from sqlalchemy import select, func, and_
 
 
 class TenantService:
+    
+    @staticmethod
+    async def populate_tenant_stats(db: AsyncSession, tenant: Tenant) -> Tenant:
+        """Populate statistic counts for the tenant."""
+        
+        user_count_query = select(func.count()).select_from(User).where(
+            and_(
+                User.tenant_id == tenant.id,
+                User.deleted_at.is_(None)
+            )
+        )
+        tenant.user_count = (await db.execute(user_count_query)).scalar()
+
+        group_count_query = select(func.count()).select_from(Group).where(
+            and_(
+                Group.tenant_id == tenant.id,
+                Group.deleted_at.is_(None)
+            )
+        )
+        tenant.active_group_count = (await db.execute(group_count_query)).scalar()
+
+        event_count_query = select(func.count()).select_from(TravelEvent).where(
+            and_(
+                TravelEvent.tenant_id == tenant.id,
+                TravelEvent.deleted_at.is_(None),
+                TravelEvent.status != EventStatus.CANCELLED
+            )
+        )
+        tenant.active_event_count = (await db.execute(event_count_query)).scalar()
+        
+        return tenant
+
     
     @staticmethod
     async def create_tenant(
@@ -58,6 +95,9 @@ class TenantService:
         
         if not tenant:
             raise NotFoundException(detail="Tenant not found")
+
+        # Counts
+        await TenantService.populate_tenant_stats(db, tenant)
         
         return tenant
     
@@ -86,6 +126,19 @@ class TenantService:
         query = query.offset(skip).limit(limit).order_by(Tenant.created_at.desc())
         result = await db.execute(query)
         tenants = list(result.scalars().all())
+        
+        # Populate user_count for each tenant
+        for tenant in tenants:
+            
+            user_count_query = select(func.count()).select_from(User).where(
+                and_(
+                    User.tenant_id == tenant.id,
+                    User.deleted_at.is_(None)
+                )
+            )
+            tenant.user_count = (await db.execute(user_count_query)).scalar()
+        
+        return tenants, total
         
         return tenants, total
     

@@ -11,7 +11,8 @@ from app.db.session import get_db
 from app.modules.tenants.schema import (
     TenantCreate,
     TenantUpdate,
-    TenantResponse
+    TenantResponse,
+    TenantDetailResponse
 )
 from app.modules.tenants.model import Tenant
 from app.modules.tenants.service import TenantService
@@ -45,41 +46,28 @@ async def create_tenant(
     
     return success_response(
         message="Tenant created successfully",
-        data={
-            "id": str(tenant.id),
-            "name": tenant.name,
-            "description": tenant.description,
-            "is_active": tenant.is_active,
-            "created_at": tenant.created_at.isoformat(),
-            "updated_at": tenant.updated_at.isoformat(),
-            "deleted_at": tenant.deleted_at.isoformat() if tenant.deleted_at else None
-        }
+        data=tenant
     )
 
 
 @router.get(
     "/{tenant_id}",
-    response_model=SuccessResponse[TenantResponse],
+    response_model=SuccessResponse[TenantDetailResponse],
     summary="Get tenant by ID"
 )
 async def get_tenant(
-    tenant: Tenant = Depends(get_valid_tenant)
+    tenant: Tenant = Depends(get_valid_tenant),
+    db: AsyncSession = Depends(get_db)
 ):
     """
     Get a tenant by ID (SUPER_ADMIN only).
     Permissions handled by `get_valid_tenant` dependency.
     """
+    await TenantService.populate_tenant_stats(db, tenant)
+    
     return success_response(
         message="Tenant retrieved successfully",
-        data={
-            "id": str(tenant.id),
-            "name": tenant.name,
-            "description": tenant.description,
-            "is_active": tenant.is_active,
-            "created_at": tenant.created_at.isoformat(),
-            "updated_at": tenant.updated_at.isoformat(),
-            "deleted_at": tenant.deleted_at.isoformat() if tenant.deleted_at else None
-        }
+        data=tenant
     )
 
 
@@ -99,18 +87,7 @@ async def list_tenants(
     
     return paginated_response(
         message="Tenants retrieved successfully",
-        data=[
-            {
-                "id": str(t.id),
-                "name": t.name,
-                "description": t.description,
-                "is_active": t.is_active,
-                "created_at": t.created_at.isoformat() if hasattr(t, 'created_at') else None,
-                "updated_at": t.updated_at.isoformat() if hasattr(t, 'updated_at') else None,
-                "deleted_at": t.deleted_at.isoformat() if t.deleted_at else None
-            }
-            for t in tenants
-        ],
+        data=tenants,
         total=total,
         skip=pagination.skip,
         limit=pagination.limit
@@ -134,15 +111,7 @@ async def update_tenant(
     
     return success_response(
         message="Tenant updated successfully",
-        data={
-            "id": str(updated_tenant.id),
-            "name": updated_tenant.name,
-            "description": updated_tenant.description,
-            "is_active": updated_tenant.is_active,
-            "created_at": updated_tenant.created_at.isoformat(),
-            "updated_at": updated_tenant.updated_at.isoformat(),
-            "deleted_at": updated_tenant.deleted_at.isoformat() if updated_tenant.deleted_at else None
-        }
+        data=updated_tenant
     )
 
 
