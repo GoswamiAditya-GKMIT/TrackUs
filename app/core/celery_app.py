@@ -9,6 +9,10 @@ celery_app = Celery(
     include=["app.modules.cleanup.tasks"]
 )
 
+# Ensure all models are imported and registered
+from app.db.base import import_models
+import_models()
+
 celery_app.conf.update(
     task_serializer="json",
     accept_content=["json"],
