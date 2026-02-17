@@ -27,12 +27,13 @@ class ConnectionManager:
             self.active_connections[group_id][user_id] = []
         
         self.active_connections[group_id][user_id].append(websocket)
-        logger.info(f"User {user_id} connected to group {group_id}. Active users: {list(self.active_connections[group_id].keys())}")
+        logger.info(f"User {user_id} connected. Group: {group_id}. Total groups: {len(self.active_connections)}")
 
     def disconnect(self, websocket: WebSocket, group_id: str, user_id: str):
         """
         Remove a specific connection for a user in a group.
         """
+        logger.info(f"Disconnecting user {user_id} from group {group_id}")
         if group_id in self.active_connections:
             if user_id in self.active_connections[group_id]:
                 if websocket in self.active_connections[group_id][user_id]:
@@ -44,7 +45,7 @@ class ConnectionManager:
             if not self.active_connections[group_id]:
                 del self.active_connections[group_id]
         
-        logger.info(f"Connection removed for user {user_id} in group {group_id}")
+        logger.info(f"Connection removed for user {user_id} in group {group_id}. Group exists: {group_id in self.active_connections}")
 
     async def disconnect_user(self, group_id: str, user_id: str, reason: str = "Membership revoked"):
         """
@@ -73,6 +74,7 @@ class ConnectionManager:
         If Pub/Sub is enabled, publishes to Redis for cross-server distribution.
         Otherwise, broadcasts directly to local connections.
         """
+        logger.info(f"Broadcasting message to group_id: {group_id}. PubSub enabled: {bool(self.pubsub)}")
         if self.pubsub:
             # Multi-server mode: publish to Redis
             channel = f"group:{group_id}"
@@ -87,6 +89,8 @@ class ConnectionManager:
         This is called either directly (single-server) or by Pub/Sub subscriber (multi-server).
         """
         if group_id in self.active_connections:
+            users_count = len(self.active_connections[group_id])
+            logger.info(f"Broadcast local: Found {users_count} active users in group {group_id}")
             for user_id, connections in list(self.active_connections[group_id].items()):
                 for websocket in list(connections):
                     try:
@@ -94,6 +98,8 @@ class ConnectionManager:
                     except Exception as e:
                         logger.error(f"Error broadcasting to user {user_id} in {group_id}: {e}")
                         self.disconnect(websocket, group_id, user_id)
+        else:
+            logger.info(f"Broadcast local: No active connections found for group {group_id}")
 
 
 # Global manager instance

@@ -20,6 +20,7 @@ from app.core.exceptions import (
     BadRequestException
 )
 from app.common.enums import UserRole
+from app.common.utils import apply_tenant_filter
 
 
 class UserService:
@@ -141,12 +142,17 @@ class UserService:
     async def get_user(
         db: AsyncSession,
         user_id: uuid.UUID,
+        current_user: Optional[User] = None
     ) -> User:
 
         query = select(User).where(
             User.id == user_id,
             User.deleted_at.is_(None)
         ).options(selectinload(User.tenant))
+        
+        if current_user:
+            query = apply_tenant_filter(query, current_user, User)
+            
         result = await db.execute(query)
         user = result.scalar_one_or_none()
         
@@ -192,11 +198,11 @@ class UserService:
         if current_user.role == UserRole.SUPER_ADMIN:
             query = query.where(User.role == UserRole.TENANT_ADMIN)
             
-        elif current_user.role == UserRole.TENANT_ADMIN:
-            query = query.where(
-                User.tenant_id == current_user.tenant_id,
-                User.role == UserRole.USER
-            )
+        elif current_user.role == UserRole.TENANT_ADMIN or current_user.role == UserRole.USER:
+            # Apply tenant isolation (handles tenant_id check)
+            query = apply_tenant_filter(query, current_user, User)
+            # Additional role constraint for Tenant Admin/User
+            query = query.where(User.role == UserRole.USER)
         else:
             raise PermissionDeniedException(detail="PERMISSION_DENIED")
         
@@ -263,7 +269,6 @@ class UserService:
         
         redis_client = await get_redis()
         token = await AuthService.generate_and_store_token(redis_client, email)
-
         
         return user, token
     

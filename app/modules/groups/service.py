@@ -24,6 +24,8 @@ from app.core.exceptions import (
 from app.modules.notifications.service import NotificationService
 from app.modules.notifications.schema import NotificationCreate
 from app.common.constants import NotificationType, ReferenceType
+from app.common.utils import apply_tenant_filter
+
         
 
 logger = logging.getLogger(__name__)
@@ -85,15 +87,15 @@ class GroupService:
                 Group.deleted_at == None
             )
         )
+        
+        # Apply tenant isolation
+        query = apply_tenant_filter(query, user, Group)
+        
         result = await db.execute(query)
         group = result.scalar_one_or_none()
 
         if not group:
             raise NotFoundException(detail="Group not found")
-
-        # Tenant isolation
-        if group.tenant_id != user.tenant_id:
-            raise TenantIsolationException()
 
         # Count members
         count_query = select(func.count()).select_from(GroupMember).where(

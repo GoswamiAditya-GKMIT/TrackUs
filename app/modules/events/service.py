@@ -25,6 +25,7 @@ from app.modules.notifications.service import NotificationService
 from app.modules.notifications.schema import NotificationCreate
 from app.common.constants import NotificationType, ReferenceType
 from app.modules.groups.service import GroupService
+from app.common.utils import apply_tenant_filter
 
 logger = logging.getLogger(__name__)
 
@@ -53,16 +54,14 @@ class EventService:
                 Group.deleted_at.is_(None)
             )
         )
+        
+        query = apply_tenant_filter(query, creator, Group)
+        
         result = await db.execute(query)
         group = result.scalar_one_or_none()
         
         if not group:
             raise NotFoundException(detail="Group not found")
-        
-        if group.tenant_id != creator.tenant_id:
-            raise TenantIsolationException(
-                detail="Cannot create event in group from different tenant"
-            )
         
         if event_data.end_time <= event_data.start_time:
             raise BadRequestException(detail="End time must be after start time")
@@ -144,8 +143,10 @@ class EventService:
             f"with {len(members)} participants auto-invited"
         )
         
-
+        
+        
         invited_ids = [m.user_id for m in members if m.user_id != creator.id]
+        logger.info(f"Found {len(members)} entries. Creator: {creator.id}. Invited candidates: {len(invited_ids)}")
         if invited_ids:
             try:
                 await NotificationService.create_bulk_notifications(
@@ -206,13 +207,15 @@ class EventService:
     @staticmethod
     async def get_event(
         db: AsyncSession,
-        event_id: uuid.UUID
+        event_id: uuid.UUID,
+        user: User
     ) -> Optional[TravelEvent]:
         """
         Get a single event by ID.
         Args:
             db: Database session
-            event_id: Event ID  
+            event_id: Event ID 
+            user: User 
         Returns:
             TravelEvent or None if not found
         """
@@ -227,6 +230,11 @@ class EventService:
                 TravelEvent.deleted_at.is_(None)
             )
         )
+        
+        query = apply_tenant_filter(query, user, TravelEvent)
+        
+        result = await db.execute(query)
+        return result.scalar_one_or_none()
         
     @staticmethod
     def _validate_status_transition(
