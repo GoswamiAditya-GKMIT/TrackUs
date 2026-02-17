@@ -26,7 +26,15 @@ async def get_valid_group(
     """
     Dependency to fetch a group and verify it exists and belongs to the user's tenant.
     """
-    return await GroupService.get_group(db, group_id, current_user)
+    group = await GroupService.get_group(db, group_id, current_user)
+    
+    if not group:
+        raise NotFoundException(detail="Group not found")
+
+    if current_user.tenant_id and group.tenant_id != current_user.tenant_id:
+        raise NotFoundException(detail="Group not found")
+
+    return group
 
 
 async def get_current_membership(
