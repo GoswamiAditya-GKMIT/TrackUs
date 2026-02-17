@@ -19,6 +19,7 @@ dependencies = [
     "aiosmtplib>=5.1.0",
     "redis>=5.0.0",
     "fastapi-limiter==0.1.6",
+    "celery[redis]>=5.6.2",
 ]
 
 [build-system]

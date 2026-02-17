@@ -49,6 +49,7 @@ from app.realtime.manager import manager
 from app.realtime.chat import chat_socket_handler, event_chat_socket_handler
 from app.realtime.location import location_socket_handler
 from app.realtime.notifications import notification_socket_handler
+from app.core.celery_app import celery_app
 
 
 logging.basicConfig(
@@ -97,6 +98,9 @@ async def lifespan(app: FastAPI):
         logger.info("FastAPI Rate Limiter initialized")
     else:
         logger.info("FastAPI Rate Limiter disabled by configuration")
+
+    logger.info(f"Celery app initialized: {celery_app.main}")
+    logger.info(f"Registered Celery tasks: {list(celery_app.tasks.keys())}")
 
     logger.info("Application startup complete")
 

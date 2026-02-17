@@ -43,6 +43,11 @@ class Settings(BaseSettings):
     # Frontend Settings
     FRONTEND_URL: str = "http://localhost:3000"
     
+    
+    # Celery Settings
+    CELERY_BROKER_URL: str = "redis://localhost:6379/1"
+    CELERY_RESULT_BACKEND: str = "redis://localhost:6379/1"
+    
     # Realtime Settings
     REDIS_PUBSUB_TIMEOUT: float = 1.0
     
