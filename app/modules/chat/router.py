@@ -10,7 +10,7 @@ from app.modules.chat.schema import ChatMessageCreate, ChatMessageResponse, Even
 from app.modules.chat.service import ChatService, EventChatService
 from app.modules.users.model import User
 from app.modules.events.model import TravelEvent
-from app.dependencies.auth import get_current_user
+from app.dependencies.auth import get_current_user, restrict_super_admin
 from app.dependencies.events import get_accessible_event
 from app.dependencies.common import PaginationParams
 from app.common.response_utils import success_response, paginated_response
@@ -49,7 +49,8 @@ async def send_message(
 @router.get(
     "/groups/{group_id}/messages",
     response_model=PaginatedResponse[ChatMessageResponse],
-    summary="Get group message history"
+    summary="Get group message history",
+    dependencies=[Depends(restrict_super_admin)]
 )
 async def get_chat_history(
     group_id: uuid.UUID,
@@ -115,7 +116,8 @@ async def send_event_message(
 @router.get(
     "/events/{event_id}/messages",
     response_model=PaginatedResponse[EventMessageResponse],
-    summary="List event chat messages"
+    summary="List event chat messages",
+    dependencies=[Depends(restrict_super_admin)]
 )
 async def list_event_messages(
     event_id: uuid.UUID,

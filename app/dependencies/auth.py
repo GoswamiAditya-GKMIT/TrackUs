@@ -105,3 +105,15 @@ async def require_admin(
             detail="Only admins can perform this action"
         )
     return current_user
+
+async def restrict_super_admin(
+    current_user: User = Depends(get_current_user)
+) -> User:
+    """
+    Explicitly deny access to SUPER_ADMIN users.
+    """
+    if current_user.role == UserRole.SUPER_ADMIN:
+        raise PermissionDeniedException(
+            detail="Super admins are not allowed to perform this action"
+        )
+    return current_user

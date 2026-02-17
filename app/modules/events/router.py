@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import get_db
-from app.dependencies.auth import get_current_user
+from app.dependencies.auth import get_current_user, restrict_super_admin
 from app.dependencies.groups import require_group_admin, require_group_member
 from app.dependencies.events import get_accessible_event, require_event_admin
 from app.modules.users.model import User
@@ -55,7 +55,8 @@ async def create_event(
 @router.get(
     "/groups/{group_id}/events",
     response_model=PaginatedResponse[EventResponse],
-    summary="List all events in a group"
+    summary="List all events in a group",
+    dependencies=[Depends(restrict_super_admin)]
 )
 async def list_events(
     group_id: uuid.UUID,
@@ -118,7 +119,8 @@ async def update_event(
 @router.get(
     "/events/{event_id}/participants",
     response_model=PaginatedResponse[ParticipantResponse],
-    summary="List all participants of an event"
+    summary="List all participants of an event",
+    dependencies=[Depends(restrict_super_admin)]
 )
 async def list_participants(
     event_id: uuid.UUID,

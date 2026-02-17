@@ -12,7 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.db.session import get_db
 from app.modules.users.model import User
 from app.modules.groups.model import Group, GroupMember
-from app.dependencies.auth import get_current_user, require_tenant_admin
+from app.dependencies.auth import get_current_user, require_tenant_admin, restrict_super_admin
 from app.modules.groups.service import GroupService, MembershipService
 from app.modules.groups.schema import (
     GroupCreate, 
@@ -62,7 +62,8 @@ async def create_group(
 @router.get(
     "",
     response_model=PaginatedResponse[Union[GroupAdminResponse, GroupResponse]],
-    summary="List groups"
+    summary="List groups",
+    dependencies=[Depends(restrict_super_admin)]
 )
 async def list_groups(
     pagination: PaginationParams = Depends(),
@@ -153,7 +154,8 @@ async def delete_group(
 @router.get(
     "/{group_id}/members",
     response_model=PaginatedResponse[GroupMemberResponse],
-    summary="List group members"
+    summary="List group members",
+    dependencies=[Depends(restrict_super_admin)]
 )
 async def list_members(
     pagination: PaginationParams = Depends(),
