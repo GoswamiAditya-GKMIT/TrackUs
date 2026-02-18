@@ -46,6 +46,7 @@ async def get_event_locations(
     locations, total = await LocationService.get_event_locations(
         db, 
         event_id, 
+        tenant_id=current_user.tenant_id,
         active_only=active_only,
         skip=pagination.skip,
         limit=pagination.limit
@@ -78,7 +79,7 @@ async def get_specific_user_location(
     if not participant:
          raise PermissionDeniedException(detail="You are not a participant of this event")
 
-    location = await LocationService.get_user_location(db, event_id, user_id)
+    location = await LocationService.get_user_location(db, event_id, user_id, current_user.tenant_id)
     
     if not location:
         raise NotFoundException(detail="Location not found for this user")
@@ -102,7 +103,7 @@ async def stop_sharing_location(
     """
     Stop sharing live location for the current user.
     """
-    await LocationService.stop_sharing(db, event_id, current_user.id)
+    await LocationService.stop_sharing(db, event_id, current_user.id, current_user.tenant_id)
     return success_response(message="Location sharing stopped", data=None)
 
 @router.post(
@@ -126,13 +127,13 @@ async def simulate_location(
         raise NotFoundException(detail="Target user is not a participant")
         
     if action == "start":
-        started = await LocationSimulator.start_simulation(event_id, user_id)
+        started = await LocationSimulator.start_simulation(event_id, user_id, current_user.tenant_id)
         if started:
             return success_response(message="Simulation started", data={"status": "running"})
         else:
             return success_response(message="Simulation already running", data={"status": "running"})
     else:
-        stopped = await LocationSimulator.stop_simulation(event_id, user_id)
+        stopped = await LocationSimulator.stop_simulation(event_id, user_id, current_user.tenant_id)
         if stopped:
             return success_response(message="Simulation stopped", data={"status": "stopped"})
         else:

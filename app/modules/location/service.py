@@ -32,7 +32,8 @@ class LocationService:
     async def _validate_permissions(
         db: AsyncSession,
         event_id: uuid.UUID,
-        user_id: uuid.UUID
+        user_id: uuid.UUID,
+        tenant_id: uuid.UUID
     ) -> None:
         """
         Validate that user can share location in this event.
@@ -43,18 +44,15 @@ class LocationService:
         result = await db.execute(event_query)
         event = result.scalar_one_or_none()
 
-        if not event:
+        if not event or event.tenant_id != tenant_id:
             raise NotFoundException(detail="Event not found")
 
-        user_query = select(User).where(User.id == user_id)
+        user_query = select(User).where(and_(User.id == user_id, User.tenant_id == tenant_id))
         u_result = await db.execute(user_query)
         user = u_result.scalar_one_or_none()
         
         if not user:
              raise NotFoundException(detail="User not found")
-             
-        if user.tenant_id and event.tenant_id != user.tenant_id:
-            raise NotFoundException(detail="Event not found")
 
         if event.status != EventStatus.ONGOING:
              raise PermissionDeniedException(
@@ -84,6 +82,7 @@ class LocationService:
         db: AsyncSession,
         event_id: uuid.UUID,
         user_id: uuid.UUID,
+        tenant_id: uuid.UUID,
         location_data: LocationUpdate
     ) -> LiveLocation:
         """
@@ -91,13 +90,14 @@ class LocationService:
         Upserts the LiveLocation record and broadcasts via WebSocket.
         """
         # Validate permissions
-        await LocationService._validate_permissions(db, event_id, user_id)
+        await LocationService._validate_permissions(db, event_id, user_id, tenant_id)
 
         # Check for existing location record
         query = select(LiveLocation).where(
             and_(
                 LiveLocation.event_id == event_id,
-                LiveLocation.user_id == user_id
+                LiveLocation.user_id == user_id,
+                LiveLocation.tenant_id == tenant_id
             )
         )
         result = await db.execute(query)
@@ -111,8 +111,6 @@ class LocationService:
             location.is_active = True
             location.last_updated_at = timestamp
         else:
-            event_q = select(TravelEvent.tenant_id).where(TravelEvent.id == event_id)
-            tenant_id = (await db.execute(event_q)).scalar_one()
 
             location = LiveLocation(
                 tenant_id=tenant_id,
@@ -145,7 +143,10 @@ class LocationService:
 
     @staticmethod
     async def get_user_location(
-        db: AsyncSession, event_id: uuid.UUID, user_id: uuid.UUID
+        db: AsyncSession, 
+        event_id: uuid.UUID, 
+        user_id: uuid.UUID,
+        tenant_id: uuid.UUID
     ) -> Optional[LiveLocation]:
         """
         Get the current active location for a specific user in an event.
@@ -153,7 +154,8 @@ class LocationService:
         query = select(LiveLocation).where(
             and_(
                 LiveLocation.event_id == event_id,
-                LiveLocation.user_id == user_id
+                LiveLocation.user_id == user_id,
+                LiveLocation.tenant_id == tenant_id
                 )
         )
         result = await db.execute(query)
@@ -163,6 +165,7 @@ class LocationService:
     async def get_event_locations(
         db: AsyncSession,
         event_id: uuid.UUID,
+        tenant_id: uuid.UUID,
         active_only: bool = True,
         skip: int = 0,
         limit: int = 20
@@ -173,7 +176,12 @@ class LocationService:
         If active_only is False, returns all users' last known locations.
         """
         # Base query for filtering
-        base_query = select(LiveLocation).where(LiveLocation.event_id == event_id)
+        base_query = select(LiveLocation).where(
+            and_(
+                LiveLocation.event_id == event_id,
+                LiveLocation.tenant_id == tenant_id
+            )
+        )
         if active_only:
             base_query = base_query.where(LiveLocation.is_active == True)
 
@@ -196,7 +204,8 @@ class LocationService:
     async def stop_sharing(
         db: AsyncSession,
         event_id: uuid.UUID,
-        user_id: uuid.UUID
+        user_id: uuid.UUID,
+        tenant_id: uuid.UUID
     ) -> None:
         """
         Stop sharing location (mark inactive).
@@ -204,7 +213,8 @@ class LocationService:
         query = select(LiveLocation).where(
             and_(
                 LiveLocation.event_id == event_id,
-                LiveLocation.user_id == user_id
+                LiveLocation.user_id == user_id,
+                LiveLocation.tenant_id == tenant_id
             )
         )
         result = await db.execute(query)

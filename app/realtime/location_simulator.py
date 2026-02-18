@@ -40,7 +40,8 @@ class LocationSimulator:
     async def start_simulation(
         cls, 
         event_id: uuid.UUID, 
-        user_id: uuid.UUID
+        user_id: uuid.UUID,
+        tenant_id: uuid.UUID
     ) -> bool:
         """
         Start simulating movement for a user in an event.
@@ -58,7 +59,7 @@ class LocationSimulator:
             # an exception, which the API router will catch and return to the user.
             # This prevents silent background failures.
             try:
-                await LocationService._validate_permissions(db, event_id, user_id)
+                await LocationService._validate_permissions(db, event_id, user_id, tenant_id)
             except Exception as e:
                 logger.warning(f"Simulator start rejected for {key}: {e}")
                 raise e
@@ -75,7 +76,7 @@ class LocationSimulator:
 
         # Start background task
         task = asyncio.create_task(
-            cls._simulation_loop(event_id, user_id)
+            cls._simulation_loop(event_id, user_id, tenant_id)
         )
         cls._active_tasks[key] = task
         logger.info(f"Started simulation for {key}")
@@ -86,7 +87,8 @@ class LocationSimulator:
     async def stop_simulation(
         cls, 
         event_id: uuid.UUID, 
-        user_id: uuid.UUID
+        user_id: uuid.UUID,
+        tenant_id: uuid.UUID
     ) -> bool:
         """
         Stop simulation for a user.
@@ -101,12 +103,12 @@ class LocationSimulator:
         
         # Even if task doesn't exist, ensure DB status is consistent if requested
         async with AsyncSessionLocal() as db:
-            await LocationService.stop_sharing(db, event_id, user_id)
+            await LocationService.stop_sharing(db, event_id, user_id, tenant_id)
         
         return False
 
     @classmethod
-    async def _simulation_loop(cls, event_id: uuid.UUID, user_id: uuid.UUID):
+    async def _simulation_loop(cls, event_id: uuid.UUID, user_id: uuid.UUID, tenant_id: uuid.UUID):
         """
         Background loop to generate coordinates.
         """
@@ -121,7 +123,7 @@ class LocationSimulator:
             while True:
                 async with AsyncSessionLocal() as db:
                     # We check if location exists and is INACTIVE. 
-                    current_loc = await LocationService.get_user_location(db, event_id, user_id)
+                    current_loc = await LocationService.get_user_location(db, event_id, user_id, tenant_id)
                     
                     if current_loc and not current_loc.is_active:
                          logger.info(f"Simulation stopped externally for {key}")
@@ -133,7 +135,7 @@ class LocationSimulator:
                             longitude=current_lng
                         )
                         await LocationService.update_location(
-                            db, event_id, user_id, update
+                            db, event_id, user_id, tenant_id, update
                         )
                         logger.debug(f"Simulated update for {key}: {current_lat}, {current_lng}")
                     except Exception as e:
@@ -164,7 +166,7 @@ class LocationSimulator:
             # Ensure DB reflects that sharing has stopped
             async with AsyncSessionLocal() as db:
                 try:
-                    await LocationService.stop_sharing(db, event_id, user_id)
+                    await LocationService.stop_sharing(db, event_id, user_id, tenant_id)
                 except Exception as e:
                     logger.error(f"Failed to stop sharing in finally block for {key}: {e}")
             

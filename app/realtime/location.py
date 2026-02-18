@@ -39,7 +39,7 @@ async def location_socket_handler(
     # We use LocationService._validate_permissions which checks Participant status and Event status
     async with AsyncSessionLocal() as db:
         try:
-            await LocationService._validate_permissions(db, event_id, user.id)
+            await LocationService._validate_permissions(db, event_id, user.id, user.tenant_id)
         except Exception as e:
             logger.error(f"WS Location connection validation failed for event {event_id}: {e}")
             await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
@@ -74,7 +74,7 @@ async def location_socket_handler(
                         )
                         
                         await LocationService.update_location(
-                            db, event_id, user.id, loc_update
+                            db, event_id, user.id, user.tenant_id, loc_update
                         )
                     except ValidationError as e:
                         await websocket.send_json({"type": "error", "message": str(e)})
@@ -85,7 +85,7 @@ async def location_socket_handler(
                         logger.error(f"Location update error: {e}")
                 
                 elif msg_type == "stop_sharing":
-                    await LocationService.stop_sharing(db, event_id, user.id)
+                    await LocationService.stop_sharing(db, event_id, user.id, user.tenant_id)
                 
                 else:
                     logger.debug(f"Unknown message type: {msg_type}")
