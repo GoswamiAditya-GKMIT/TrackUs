@@ -4,10 +4,11 @@ FastAPI application entry point.
 import logging
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.exceptions import RequestValidationError
 from starlette.exceptions import HTTPException as StarletteHTTPException
+import time
 
 from app.core.config import settings
 from app.db.base import import_models
@@ -50,12 +51,12 @@ from app.realtime.chat import chat_socket_handler, event_chat_socket_handler
 from app.realtime.location import location_socket_handler
 from app.realtime.notifications import notification_socket_handler
 from app.core.celery_app import celery_app
+from app.core.logging import setup_logging , log_request_middleware
 
 
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-)
+
+setup_logging()
+
 logger = logging.getLogger(__name__)
 
 
@@ -132,6 +133,8 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+app.middleware("http")(log_request_middleware)
 
 app.add_exception_handler(BadRequestException, bad_request_exception_handler)
 app.add_exception_handler(StarletteHTTPException, http_exception_handler)
