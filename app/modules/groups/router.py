@@ -71,17 +71,9 @@ async def list_groups(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    if current_user.role == UserRole.TENANT_ADMIN:
-        groups, total = await GroupService.list_tenant_groups(
-            db, current_user.tenant_id, pagination.skip, pagination.limit, active
-        )
-        data = [GroupAdminResponse.model_validate(g) for g in groups]
-    else:
-        # Regular users only see their active groups
-        groups, total = await GroupService.list_user_groups(
-            db, current_user, pagination.skip, pagination.limit
-        )
-        data = [GroupResponse.model_validate(g) for g in groups]
+    data, total = await GroupService.list_groups_for_user(
+        db, current_user, pagination.skip, pagination.limit, active
+    )
     
     response_data = paginated_response(
         message="Groups retrieved successfully",
@@ -95,23 +87,19 @@ async def list_groups(
 
 @router.get(
     "/{group_id}",
-    response_model=SuccessResponse[Union[GroupDetailAdminResponse, GroupDetailResponse]],
+    response_model=SuccessResponse[dict],
     summary="Get group details"
 )
 async def get_group(
     group = Depends(require_group_access),
     current_user: User = Depends(get_current_user)
 ):
-    if current_user.role == UserRole.TENANT_ADMIN:
-        data = GroupDetailAdminResponse.model_validate(group)
-    else:
-        data = GroupDetailResponse.model_validate(group)
+    data = GroupService.get_group_details_for_user(current_user, group)
 
-    response_data = success_response(
+    return success_response(
         message="Group details retrieved successfully",
         data=data
     )
-    return JSONResponse(content=jsonable_encoder(response_data))
 
 
 @router.patch(

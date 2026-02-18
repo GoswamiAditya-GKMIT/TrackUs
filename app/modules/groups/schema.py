@@ -37,7 +37,7 @@ class GroupResponse(GroupBase):
 
 
 class GroupAdminResponse(GroupResponse):
-    deleted_at: Optional[datetime] = None
+    deleted_at: Optional[datetime]
 
 
 class GroupMemberBase(BaseSchema):

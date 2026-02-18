@@ -11,16 +11,18 @@ import redis.asyncio as redis
 from app.modules.users.model import User
 from app.modules.users.service import UserService
 from app.modules.auth.schema import LoginRequest, TokenResponse
+from app.modules.auth.blacklist_service import TokenBlacklistService
+from datetime import datetime, timezone
 from app.core.security import (
     verify_password,
     create_access_token,
     create_refresh_token,
-    decode_refresh_token
+    decode_refresh_token,
+    decode_access_token
 )
 from app.core.exceptions import AuthenticationException, EmailNotVerifiedException
 from app.core.config import settings
 import uuid
-from app.modules.auth.blacklist_service import TokenBlacklistService
 
 
 
@@ -123,6 +125,78 @@ class AuthService:
             access_token=access_token,
             refresh_token=refresh_token  
         )
+
+    @staticmethod
+    async def verify_email(
+        db: AsyncSession,
+        redis_client: redis.Redis,
+        token: str
+    ) -> User:
+        """
+        Verify user email using token.
+        """
+        return await UserService.verify_user_email(db, redis_client, token)
+
+    @staticmethod
+    async def resend_verification_email(
+        db: AsyncSession,
+        email: str
+    ) -> tuple[User, str]:
+        """
+        Resend verification email. Returns user and token.
+        """
+        return await UserService.resend_verification_email(db, email)
+    
+    @staticmethod
+    async def logout(
+        db: AsyncSession,
+        redis_client: redis.Redis,
+        current_user: User,
+        access_token: str,
+        refresh_token: Optional[str] = None
+    ) -> None:
+        """
+        Logout user by blacklisting tokens.
+        """
+        # Blacklist Access Token
+        payload = decode_access_token(access_token)
+        if not payload:
+            raise AuthenticationException(detail="Invalid token")
+            
+        jti = payload.get("jti")
+        exp = payload.get("exp")
+        
+        if not jti or not exp:
+            raise AuthenticationException(detail="Invalid token payload")
+            
+        expires_at = datetime.fromtimestamp(exp, tz=timezone.utc)
+        
+        await TokenBlacklistService.blacklist_token(
+            db=db,
+            jti=jti,
+            user_id=current_user.id,
+            token_type="access",
+            expires_at=expires_at,
+            reason="logout",
+            redis_client=redis_client
+        )
+        
+        # Blacklist Refresh Token if provided
+        if refresh_token:
+            r_payload = decode_refresh_token(refresh_token)
+            if r_payload:
+                r_jti = r_payload.get("jti")
+                r_exp = r_payload.get("exp")
+                if r_jti and r_exp:
+                    r_expires_at = datetime.fromtimestamp(r_exp, tz=timezone.utc)
+                    await TokenBlacklistService.blacklist_token(
+                        db=db,
+                        jti=r_jti,
+                        user_id=current_user.id,
+                        token_type="refresh",
+                        expires_at=r_expires_at,
+                        reason="logout"
+                    )
     
     # Email Verification Token Methods
     
@@ -247,6 +321,30 @@ class AuthService:
         await redis_client.delete(AuthService._get_redis_key(email, AuthService.PASSWORD_RESET_PREFIX))
         
         logger.info(f"Invalidated all tokens for email {email}")
+
+    @staticmethod
+    async def forgot_password(
+        db: AsyncSession,
+        redis_client: redis.Redis,
+        email: str
+    ) -> tuple[User, str]:
+        """
+        Handle forgot password logic. Returns user and reset token.
+        Returns (None, None) if user not found to prevent enumeration.
+        """
+        user = await UserService.get_user_by_email(db, email)
+        
+        if not user or not user.is_active:
+            return None, None
+            
+        # Generate reset token
+        token = await AuthService.generate_and_store_token(
+            redis_client, 
+            user.email, 
+            token_type=AuthService.PASSWORD_RESET_PREFIX
+        )
+        
+        return user, token
 
     @staticmethod
     async def reset_password(

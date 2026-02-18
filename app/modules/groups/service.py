@@ -3,7 +3,7 @@ Group and Membership service layer.
 """
 import logging
 from datetime import datetime, timezone
-from typing import Optional, Sequence
+from typing import Optional, Sequence, Union
 import uuid
 
 from sqlalchemy import select, and_, func, update
@@ -11,7 +11,16 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.modules.groups.model import Group, GroupMember
-from app.modules.groups.schema import GroupCreate, GroupUpdate, GroupMemberCreate, GroupMemberUpdate
+from app.modules.groups.schema import (
+    GroupCreate, 
+    GroupUpdate, 
+    GroupResponse, 
+    GroupAdminResponse,
+    GroupDetailResponse,
+    GroupDetailAdminResponse,
+    GroupMemberCreate, 
+    GroupMemberUpdate
+)
 from app.modules.users.model import User
 from app.common.enums import GroupMemberRole, UserRole
 from app.realtime.manager import manager
@@ -190,6 +199,40 @@ class GroupService:
             group.member_count = (await db.execute(count_query)).scalar()
 
         return groups, total
+
+    @staticmethod
+    async def list_groups_for_user(
+        db: AsyncSession,
+        user: User,
+        skip: int = 0,
+        limit: int = 100,
+        active: Optional[bool] = None
+    ) -> tuple[Sequence[Union[GroupAdminResponse, GroupResponse]], int]:
+        """
+        List groups and return appropriately serialized data based on user role.
+        """
+        if user.role == UserRole.TENANT_ADMIN:
+            groups, total = await GroupService.list_tenant_groups(
+                db, user.tenant_id, skip, limit, active
+            )
+            data = [GroupAdminResponse.model_validate(g) for g in groups]
+        else:
+            # Regular users only see their active groups
+            groups, total = await GroupService.list_user_groups(
+                db, user, skip, limit
+            )
+            data = [GroupResponse.model_validate(g) for g in groups]
+        
+        return data, total
+
+    @staticmethod
+    def get_group_details_for_user(
+        user: User,
+        group: Group
+    ) -> Union[GroupDetailAdminResponse, GroupDetailResponse]:
+        if user.role == UserRole.TENANT_ADMIN:
+            return GroupDetailAdminResponse.model_validate(group)
+        return GroupDetailResponse.model_validate(group)
 
     @staticmethod
     async def update_group(

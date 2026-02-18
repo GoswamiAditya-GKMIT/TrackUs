@@ -18,17 +18,13 @@ from app.modules.auth.schema import (
     ResetPasswordRequest,
     LogoutRequest
 )
+from app.modules.users.schema import UserResponse
 from app.modules.auth.service import AuthService
 from app.modules.users.model import User
 from app.dependencies.auth import get_current_user, security
 from app.common.response_utils import success_response
 from app.common.responses import SuccessResponse
 from fastapi import BackgroundTasks
-from app.core.exceptions import AuthenticationException
-from datetime import datetime, timezone
-from app.core.security import decode_access_token, decode_refresh_token
-from app.modules.auth.blacklist_service import TokenBlacklistService
-from app.modules.users.service import UserService
 from app.common.constants import (
     RATE_LIMIT_AUTH_TIMES,
     RATE_LIMIT_AUTH_SECONDS,
@@ -84,7 +80,7 @@ async def refresh_token(
 
 @router.post(
     "/email-verification/verify",
-    response_model=SuccessResponse[dict],
+    response_model=SuccessResponse[UserResponse],
     summary="Verify user email",
     dependencies=[Depends(RateLimiter(times=RATE_LIMIT_AUTH_TIMES, seconds=RATE_LIMIT_AUTH_SECONDS))]
 )
@@ -94,20 +90,10 @@ async def verify_email(
     redis_client = Depends(get_redis)
 ):
 
-    user = await UserService.verify_user_email(db, redis_client, verification_data.token)
+    user = await AuthService.verify_email(db, redis_client, verification_data.token)
     return success_response(
         message="Email verified successfully. You can login now.",
-        data={
-            "id": str(user.id),
-            "tenant_id": str(user.tenant_id) if user.tenant_id else None,
-            "email": user.email,
-            "first_name": user.first_name,
-            "last_name": user.last_name,
-            "role": user.role.value,
-            "is_active": user.is_active,
-            "is_email_verified": user.is_email_verified,
-            "created_at": user.created_at.isoformat()
-        }
+        data=user
     )
 
 
@@ -123,7 +109,7 @@ async def resend_verification(
     db: AsyncSession = Depends(get_db)
 ):
     
-    user, token = await UserService.resend_verification_email(db, resend_data.email)
+    user, token = await AuthService.resend_verification_email(db, resend_data.email)
     
     from app.modules.users.tasks import send_verification_email
     background_tasks.add_task(
@@ -153,48 +139,13 @@ async def logout(
     db: AsyncSession = Depends(get_db),
     redis_client = Depends(get_redis)
 ):
-    token = credentials.credentials
-    payload = decode_access_token(token)
-    
-    if not payload:
-        raise AuthenticationException(detail="Invalid token")
-    
-    jti = payload.get("jti")
-    exp = payload.get("exp")
-    
-    if not jti:
-        raise AuthenticationException(detail="Token does not have JTI")
-    
-    # Convert exp timestamp to datetime
-    expires_at = datetime.fromtimestamp(exp, tz=timezone.utc)
-    
-    # Add access token to blacklist (Redis)
-    await TokenBlacklistService.blacklist_token(
+    await AuthService.logout(
         db=db,
-        jti=jti,
-        user_id=current_user.id,
-        token_type="access",
-        expires_at=expires_at,
-        reason="logout",
-        redis_client=redis_client
+        redis_client=redis_client,
+        current_user=current_user,
+        access_token=credentials.credentials,
+        refresh_token=logout_data.refresh_token if logout_data else None
     )
-    
-    # Also blacklist refresh token if provided (DB)
-    if logout_data and logout_data.refresh_token:
-        refresh_payload = decode_refresh_token(logout_data.refresh_token)
-        if refresh_payload:
-            r_jti = refresh_payload.get("jti")
-            r_exp = refresh_payload.get("exp")
-            if r_jti and r_exp:
-                r_expires_at = datetime.fromtimestamp(r_exp, tz=timezone.utc)
-                await TokenBlacklistService.blacklist_token(
-                    db=db,
-                    jti=r_jti,
-                    user_id=current_user.id,
-                    token_type="refresh",
-                    expires_at=r_expires_at,
-                    reason="logout"
-                )
     
     return success_response(
         message="Logged out successfully",
@@ -219,37 +170,20 @@ async def forgot_password(
     """
     Generates a token and sends an email with the reset link.
     """
-    user = await UserService.get_user_by_email(db, request_data.email)
+    """
+    Generates a token and sends an email with the reset link.
+    """
+    user, token = await AuthService.forgot_password(db, redis_client, request_data.email)
     
-    if not user:
-        # Return success even if email not found to prevent email enumeration
-        return success_response(
-            message="If the email exists, a password reset link has been sent.",
-            data={"message": "Check your email inbox."}
+    if user and token:
+        # Send email in background
+        from app.modules.users.tasks import send_reset_password_email
+        background_tasks.add_task(
+            send_reset_password_email,
+            email=user.email,
+            first_name=user.first_name,
+            token=token
         )
-
-    if not user.is_active:
-        # Optionally handle inactive users differently or just ignore
-        return success_response(
-            message="If the email exists, a password reset link has been sent.",
-            data={"message": "Check your email inbox."}
-        )
-        
-    # Generate reset token
-    token = await AuthService.generate_and_store_token(
-        redis_client, 
-        user.email, 
-        token_type=AuthService.PASSWORD_RESET_PREFIX
-    )
-    
-    # Send email in background
-    from app.modules.users.tasks import send_reset_password_email
-    background_tasks.add_task(
-        send_reset_password_email,
-        email=user.email,
-        first_name=user.first_name,
-        token=token
-    )
     
     return success_response(
         message="If the email exists, a password reset link has been sent.",
