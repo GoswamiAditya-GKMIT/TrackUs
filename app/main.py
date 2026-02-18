@@ -65,12 +65,12 @@ async def handle_pubsub_message(channel: str, message: dict):
     Handle incoming Pub/Sub messages and broadcast to local WebSocket connections.
     
     Args:
-        channel: Redis channel (e.g., "group:123")
+        channel: Redis channel (e.g., "room:123")
         message: Message dict to broadcast
     """
-    # Extract group_id from channel name (format: "group:{group_id}")
-    group_id = channel.split(":", 1)[1] if ":" in channel else channel
-    await manager._broadcast_local(group_id, message)
+    # Extract room_id from channel name (format: "room:{room_id}")
+    room_id = channel.split(":", 1)[1] if ":" in channel else channel
+    await manager._broadcast_local(room_id, message)
 
 
 @asynccontextmanager
@@ -84,8 +84,8 @@ async def lifespan(app: FastAPI):
     # Initialize Redis Pub/Sub for WebSocket scaling
     try:
         await pubsub_manager.connect()
-        # Register handler for group messages
-        pubsub_manager.register_handler("group:*", handle_pubsub_message)
+        # Register handler for room messages
+        pubsub_manager.register_handler("room:*", handle_pubsub_message)
         await pubsub_manager.start_subscriber()
         logger.info("Redis Pub/Sub initialized successfully")
         # Update manager to use Pub/Sub

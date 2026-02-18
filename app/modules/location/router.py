@@ -2,7 +2,6 @@
 Live Location Router.
 """
 import uuid
-import uuid
 
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -90,8 +89,8 @@ async def get_specific_user_location(
     )
 
 
-@router.post(
-    "/location/stop",
+@router.delete(
+    "/locations/me",
     response_model=SuccessResponse[None],
     summary="Stop sharing location"
 )
@@ -107,34 +106,52 @@ async def stop_sharing_location(
     return success_response(message="Location sharing stopped", data=None)
 
 @router.post(
-    "/simulate-location/{user_id}",
+    "/locations/{user_id}/simulation",
     response_model=SuccessResponse[dict],
-    summary="Start/Stop location simulation"
+    summary="Start location simulation"
 )
-async def simulate_location(
+async def start_simulate_location(
     event_id: uuid.UUID,
     user_id: uuid.UUID,
-    action: str = Query(..., regex="^(start|stop)$", description="Action to perform: start or stop"),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
     """
-    Start or Stop location simulation for a user.
+    Start location simulation for a user.
     """
     # Check if target user exists and is participant
     participant = await EventService._get_participant(db, event_id, user_id)
     if not participant:
         raise NotFoundException(detail="Target user is not a participant")
         
-    if action == "start":
-        started = await LocationSimulator.start_simulation(event_id, user_id, current_user.tenant_id)
-        if started:
-            return success_response(message="Simulation started", data={"status": "running"})
-        else:
-            return success_response(message="Simulation already running", data={"status": "running"})
+    started = await LocationSimulator.start_simulation(event_id, user_id, current_user.tenant_id)
+    if started:
+        return success_response(message="Simulation started", data={"status": "running"})
     else:
-        stopped = await LocationSimulator.stop_simulation(event_id, user_id, current_user.tenant_id)
-        if stopped:
-            return success_response(message="Simulation stopped", data={"status": "stopped"})
-        else:
-            return success_response(message="Simulation was not running", data={"status": "stopped"})
+        return success_response(message="Simulation already running", data={"status": "running"})
+
+
+@router.delete(
+    "/locations/{user_id}/simulation",
+    response_model=SuccessResponse[dict],
+    summary="Stop location simulation"
+)
+async def stop_simulate_location(
+    event_id: uuid.UUID,
+    user_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Stop location simulation for a user.
+    """
+    # Check if target user exists and is participant
+    participant = await EventService._get_participant(db, event_id, user_id)
+    if not participant:
+        raise NotFoundException(detail="Target user is not a participant")
+
+    stopped = await LocationSimulator.stop_simulation(event_id, user_id, current_user.tenant_id)
+    if stopped:
+        return success_response(message="Simulation stopped", data={"status": "stopped"})
+    else:
+        return success_response(message="Simulation was not running", data={"status": "stopped"})

@@ -69,7 +69,7 @@ async def chat_socket_handler(
         await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
         return
     
-    group_id_str = str(group_id)
+    room_id = str(group_id)
     
     # 2. Validate Membership & Tenant
     # Using AsyncSessionLocal directly for dependency-less validation
@@ -89,7 +89,7 @@ async def chat_socket_handler(
             return
 
     # 3. Connect to Manager
-    await manager.connect(websocket, group_id_str, str(user.id))
+    await manager.connect(websocket, room_id, str(user.id))
 
     try:
         while True:
@@ -107,7 +107,7 @@ async def chat_socket_handler(
                     )
                     # 5. Broadcast to all members
                     payload = ChatService.get_broadcast_payload(message)
-                    await manager.broadcast(group_id_str, payload)
+                    await manager.broadcast(room_id, payload)
                 except PermissionDeniedException as e:
                     logger.warning(f"Permission denied for user {user.id} in group {group_id}: {e.detail}")
                     await websocket.send_json({"type": "error", "message": e.detail})
@@ -118,11 +118,11 @@ async def chat_socket_handler(
                     await websocket.send_json({"type": "error", "message": "Failed to send message"})
 
     except WebSocketDisconnect:
-        manager.disconnect(websocket, group_id_str, str(user.id))
+        manager.disconnect(websocket, room_id, str(user.id))
         logger.info(f"User {user.id} disconnected from group {group_id}")
     except Exception as e:
         logger.error(f"WS Link error: {e}")
-        manager.disconnect(websocket, group_id_str, str(user.id))
+        manager.disconnect(websocket, room_id, str(user.id))
 
 
 async def event_chat_socket_handler(
@@ -140,7 +140,7 @@ async def event_chat_socket_handler(
         await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
         return
     
-    event_id_str = str(event_id)
+    room_id = str(event_id)
     
     # 2. Validate Participant Status & Tenant
     async with AsyncSessionLocal() as db:
@@ -155,9 +155,9 @@ async def event_chat_socket_handler(
             await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
             return
 
-    # 3. Connect to Manager (using event_id as the group key)
-    # The manager is generic, so we can use event_id_str as group_id
-    await manager.connect(websocket, event_id_str, str(user.id))
+    # 3. Connect to Manager (using event_id as the room key)
+    # The manager is generic, so we can use event_id as room_id
+    await manager.connect(websocket, room_id, str(user.id))
 
     try:
         while True:
@@ -175,7 +175,7 @@ async def event_chat_socket_handler(
                     )
                     # 5. Broadcast to all members
                     payload = EventChatService.get_broadcast_payload(message)
-                    await manager.broadcast(event_id_str, payload)
+                    await manager.broadcast(room_id, payload)
                 except PermissionDeniedException as e:
                     logger.warning(f"Permission denied for user {user.id} in event {event_id}: {e.detail}")
                     await websocket.send_json({"type": "error", "message": e.detail})
@@ -184,8 +184,8 @@ async def event_chat_socket_handler(
                     await websocket.send_json({"type": "error", "message": "Failed to send message"})
 
     except WebSocketDisconnect:
-        manager.disconnect(websocket, event_id_str, str(user.id))
+        manager.disconnect(websocket, room_id, str(user.id))
         logger.info(f"User {user.id} disconnected from event {event_id}")
     except Exception as e:
         logger.error(f"WS Link error in event {event_id}: {e}")
-        manager.disconnect(websocket, event_id_str, str(user.id))
+        manager.disconnect(websocket, room_id, str(user.id))

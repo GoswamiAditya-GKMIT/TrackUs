@@ -24,17 +24,17 @@ async def notification_socket_handler(
         await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
         return
     
-    user_channel = f"user:{user.id}"
+    user_room = f"user:{user.id}"
     
-    await manager.connect(websocket, user_channel, str(user.id))
+    await manager.connect(websocket, user_room, str(user.id))
     
     try:
         while True:
             await websocket.receive_text()
             
     except WebSocketDisconnect:
-        manager.disconnect(websocket, user_channel, str(user.id))
+        manager.disconnect(websocket, user_room, str(user.id))
         logger.info(f"User {user.id} disconnected from notification stream")
     except Exception as e:
         logger.error(f"WS Notification error for user {user.id}: {e}")
-        manager.disconnect(websocket, user_channel, str(user.id))
+        manager.disconnect(websocket, user_room, str(user.id))

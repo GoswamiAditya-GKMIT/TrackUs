@@ -34,7 +34,7 @@ async def location_socket_handler(
         await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
         return
     
-    event_id_str = str(event_id)
+    room_id = str(event_id)
     
     # We use LocationService._validate_permissions which checks Participant status and Event status
     async with AsyncSessionLocal() as db:
@@ -46,8 +46,8 @@ async def location_socket_handler(
             return
 
     # Connect to Manager
-    # reuse event_id as group_id for broadcasting location updates to the same channel
-    await manager.connect(websocket, event_id_str, str(user.id))
+    # reuse event_id as room_id for broadcasting location updates to the same channel
+    await manager.connect(websocket, room_id, str(user.id))
 
     try:
         while True:
@@ -92,8 +92,8 @@ async def location_socket_handler(
 
     except WebSocketDisconnect:
 
-        manager.disconnect(websocket, event_id_str, str(user.id))
+        manager.disconnect(websocket, room_id, str(user.id))
         logger.info(f"User {user.id} disconnected from location stream {event_id}")
     except Exception as e:
         logger.error(f"WS Location Link error in event {event_id}: {e}")
-        manager.disconnect(websocket, event_id_str, str(user.id))
+        manager.disconnect(websocket, room_id, str(user.id))
