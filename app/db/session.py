@@ -42,3 +42,8 @@ async def get_db() -> AsyncGenerator[AsyncSession, None]:
             yield session
         finally:
             await session.close()
+
+
+async def dispose_engine():
+    """Explicitly dispose of the global engine."""
+    await async_engine.dispose()

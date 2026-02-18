@@ -9,6 +9,7 @@ from app.db.session import AsyncSessionLocal
 from app.modules.auth.model import TokenBlacklist
 from app.modules.users.model import User
 from app.core.config import settings
+from app.db.session import dispose_engine
 
 logger = logging.getLogger(__name__)
 
@@ -53,6 +54,8 @@ def cleanup_expired_tokens():
     async def run():
         async with AsyncSessionLocal() as session:
             await _cleanup_expired_tokens(session)
+        # Ensure engine is disposed to avoid cross-loop issues in forked processes
+        await dispose_engine()
     
     asyncio.run(run())
 
@@ -62,6 +65,7 @@ def cleanup_unverified_users():
     async def run():
         async with AsyncSessionLocal() as session:
             await _cleanup_unverified_users(session)
+        await dispose_engine()
             
     asyncio.run(run())
 
@@ -71,5 +75,6 @@ def cleanup_soft_deleted_users():
     async def run():
         async with AsyncSessionLocal() as session:
             await _cleanup_soft_deleted_users(session)
+        await dispose_engine()
             
     asyncio.run(run())
