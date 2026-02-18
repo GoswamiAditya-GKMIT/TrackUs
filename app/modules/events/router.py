@@ -3,7 +3,8 @@ Travel Event router - HTTP endpoints for event management.
 """
 import uuid
 
-from fastapi import APIRouter, Depends, status
+from typing import Optional
+from fastapi import APIRouter, Depends, status, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import get_db
@@ -61,7 +62,9 @@ async def create_event(
 async def list_events(
     group_id: uuid.UUID,
     pagination: PaginationParams = Depends(),
+    deleted: Optional[bool] = Query(None, description="Filter by deleted status"),
     db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
     membership: GroupMember = Depends(require_group_member)
 ):
     """
@@ -72,8 +75,10 @@ async def list_events(
     events, total = await EventService.list_events(
         db=db,
         group_id=group_id,
+        current_user=current_user,
         skip=pagination.skip,
-        limit=pagination.limit
+        limit=pagination.limit,
+        deleted=deleted
     )
     
     return paginated_response(
@@ -112,6 +117,25 @@ async def update_event(
         message="Event updated successfully",
         data=EventResponse.model_validate(event)
     )
+
+
+@router.delete(
+    "/events/{event_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="Soft delete an event"
+)
+async def delete_event(
+    event_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    event: TravelEvent = Depends(require_event_admin)
+):
+    """
+    Soft delete an event.
+    Permissions: Event creator or group admin only
+    Returns: 204 No Content
+    """
+    await EventService.delete_event(db, event)
+    return None
 
 
 # Participant Management Endpoints

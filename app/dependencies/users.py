@@ -6,7 +6,7 @@ from typing import Literal
 
 from fastapi import Depends, Path
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+from sqlalchemy import select, func
 
 from app.db.session import get_db
 from app.modules.users.model import User
@@ -50,7 +50,8 @@ class TargetUserValidator:
     async def __call__(
         self,
         user: User = Depends(get_user_or_404),
-        current_user: User = Depends(get_current_user)
+        current_user: User = Depends(get_current_user),
+        db: AsyncSession = Depends(get_db)
     ) -> User:
         
         # Super Admin logic
@@ -59,6 +60,20 @@ class TargetUserValidator:
                  raise PermissionDeniedException(
                     detail=f"Super admins can only {self.action} tenant admins"
                 )
+            
+            if self.action == "delete":
+                # Check if this is the last tenant admin
+                query = select(func.count(User.id)).where(
+                    User.tenant_id == user.tenant_id,
+                    User.role == UserRole.TENANT_ADMIN,
+                    User.deleted_at.is_(None)
+                )
+                result = await db.execute(query)
+                count = result.scalar()
+                if count <= 1:
+                    raise PermissionDeniedException(
+                        detail="Cannot delete the last tenant admin of an organization"
+                    )
             return user
 
         # Tenant Admin logic
@@ -67,7 +82,15 @@ class TargetUserValidator:
                 raise TenantIsolationException(
                     detail=f"Cannot {self.action} users from other tenants"
                 )
-            if user.role != UserRole.USER:
+            
+            # Block self-deletion
+            if self.action == "delete" and user.id == current_user.id:
+                raise PermissionDeniedException(
+                    detail="Tenant admins cannot delete themselves"
+                )
+
+            # Allow self-update/access, but restrict other modifications to regular users
+            if user.id != current_user.id and user.role != UserRole.USER:
                 raise PermissionDeniedException(
                     detail=f"Tenant admins can only {self.action} regular users"
                 )

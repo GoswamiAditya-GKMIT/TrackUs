@@ -11,7 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.modules.events.model import TravelEvent, EventParticipant
-from app.common.enums import EventStatus, ParticipantStatus, GroupMemberRole
+from app.common.enums import EventStatus, ParticipantStatus, GroupMemberRole, UserRole
 from app.modules.events.schema import EventCreate, EventUpdate
 from app.modules.groups.model import Group, GroupMember
 from app.modules.users.model import User
@@ -170,31 +170,36 @@ class EventService:
     async def list_events(
         db: AsyncSession,
         group_id: uuid.UUID,
+        current_user: User,
         skip: int = 0,
-        limit: int = 10
+        limit: int = 10,
+        deleted: Optional[bool] = None
     ) -> tuple[Sequence[TravelEvent], int]:
         """
         List all events in a group, ordered by start_time descending.
+        Admins can optionally see deleted events. Regular users only see active ones.
         """
+        # Regular users cannot see deleted events
+        if current_user.role == UserRole.USER:
+            deleted = False
 
-        count_query = select(func.count()).select_from(TravelEvent).where(
-            and_(
-                TravelEvent.group_id == group_id,
-                TravelEvent.deleted_at.is_(None)
-            )
-        )
+        base_query = select(TravelEvent).where(TravelEvent.group_id == group_id)
+
+        # Handle soft-delete filtering
+        if deleted is True:
+            base_query = base_query.where(TravelEvent.deleted_at.is_not(None))
+        elif deleted is False:
+            base_query = base_query.where(TravelEvent.deleted_at.is_(None))
+        # If None, show both (admins only)
+
+        count_query = select(func.count()).select_from(base_query.subquery())
         total_result = await db.execute(count_query)
         total = total_result.scalar_one()
         
-        query = select(TravelEvent).options(
+        query = base_query.options(
             selectinload(TravelEvent.creator),
             selectinload(TravelEvent.group),
             selectinload(TravelEvent.participants)
-        ).where(
-            and_(
-                TravelEvent.group_id == group_id,
-                TravelEvent.deleted_at.is_(None)
-            )
         ).order_by(
             TravelEvent.start_time.desc()
         ).offset(skip).limit(limit)
@@ -672,6 +677,18 @@ class EventService:
             )
         except Exception as e:
             logger.error(f"Failed to send notification for participant remove: {e}")
+
+    @staticmethod
+    async def delete_event(
+        db: AsyncSession,
+        event: TravelEvent
+    ) -> None:
+        """
+        Soft delete an event.
+        """
+        event.soft_delete()
+        await db.commit()
+        logger.info(f"Event {event.id} soft deleted")
 
 
 __all__ = ["EventService"]

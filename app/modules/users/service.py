@@ -183,6 +183,10 @@ class UserService:
         is_active: Optional[bool] = None,
         deleted: Optional[bool] = None
     ) -> tuple[list[User], int]:
+        
+        # Regular users cannot see deleted users
+        if current_user.role == UserRole.USER:
+            deleted = False
 
         query = select(User).options(selectinload(User.tenant))
         
