@@ -9,6 +9,7 @@ from pydantic import EmailStr, Field, field_validator, model_validator
 
 from app.common.schemas import BaseSchema, BaseResponseSchema
 from app.common.enums import UserRole
+from app.common.utils import validate_password, PasswordStr
 
 
 from app.modules.tenants.schema import TenantResponse
@@ -17,22 +18,12 @@ from app.modules.tenants.schema import TenantResponse
 class UserCreate(BaseSchema):
     
     email: EmailStr
-    password: str = Field(..., min_length=8, max_length=100)
-    confirm_password: str = Field(..., min_length=8, max_length=100)
+    password: PasswordStr
+    confirm_password: PasswordStr
     first_name: str = Field(..., min_length=1, max_length=50)
     last_name: str = Field(..., min_length=1, max_length=50)
     tenant_id: Optional[uuid.UUID] = None  # Required for SUPER_ADMIN creating TENANT_ADMIN
     
-    @field_validator("password")
-    @classmethod
-    def validate_password(cls, v: str) -> str:
-        if len(v) < 8:
-            raise ValueError("Password must be at least 8 characters long")
-        if not any(c.islower() for c in v):
-            raise ValueError("Password must contain at least one lowercase letter")
-        if not any(c.isdigit() for c in v):
-            raise ValueError("Password must contain at least one digit")
-        return v
     
     @model_validator(mode='after')
     def validate_passwords_match(self):
