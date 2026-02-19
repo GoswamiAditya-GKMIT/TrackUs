@@ -3,14 +3,20 @@ User service layer - business logic for user operations.
 """
 import uuid
 from typing import Optional
+from datetime import datetime, timezone
 
-from sqlalchemy import select, func
+from sqlalchemy import select, func, update
 from sqlalchemy.orm import selectinload
 from sqlalchemy.ext.asyncio import AsyncSession
 from fastapi import HTTPException, status
 from app.modules.users.model import User
 from app.modules.users.schema import UserCreate, UserUpdate
 from app.modules.users.tasks import send_verification_email
+from app.modules.groups.model import GroupMember
+from app.modules.events.model import EventParticipant
+from app.modules.location.model import LiveLocation
+from app.modules.notifications.model import Notification
+from app.common.enums import UserRole, ParticipantStatus
 from app.modules.tenants.service import TenantService
 from app.core.security import hash_password
 from app.core.redis import get_redis
@@ -90,6 +96,7 @@ class UserService:
         await db.commit()
         await db.refresh(user)
         
+        # Inline import to prevent circular dependency with AuthService
         from app.modules.auth.service import AuthService
         
         redis_client = await get_redis()
@@ -103,7 +110,7 @@ class UserService:
         redis_client,
         token: str
     ) -> User:
-
+        # Inline import to prevent circular dependency with AuthService
         from app.modules.auth.service import AuthService
         
         # Validate and consume token (returns email if valid)
@@ -269,6 +276,7 @@ class UserService:
         if user.is_email_verified:
             raise BadRequestException(detail="Email already verified")
         
+        # Inline import to prevent circular dependency with AuthService
         from app.modules.auth.service import AuthService
         
         redis_client = await get_redis()
@@ -283,6 +291,7 @@ class UserService:
         user: User, 
         current_user: User 
     ) -> None:
+        # Inline import to prevent circular dependency with AuthService
         from app.modules.auth.service import AuthService
 
         # Invalidate any pending verification tokens
@@ -294,9 +303,7 @@ class UserService:
         user.is_active = False
         user.soft_delete()
         
-        from app.modules.groups.model import GroupMember
-        from sqlalchemy import update
-        from datetime import datetime, timezone
+        # Inline imports to prevent circular dependencies with other modules
         
         await db.execute(
             update(GroupMember)
@@ -304,24 +311,17 @@ class UserService:
             .values(left_at=datetime.now(timezone.utc))
         )
         
-        from app.modules.events.model import EventParticipant
-        from app.common.enums import ParticipantStatus
-        
         await db.execute(
             update(EventParticipant)
             .where(EventParticipant.user_id == user.id, EventParticipant.status != ParticipantStatus.LEFT)
             .values(status=ParticipantStatus.LEFT, responded_at=datetime.now(timezone.utc))
         )
         
-        from app.modules.location.model import LiveLocation
-        
         await db.execute(
             update(LiveLocation)
             .where(LiveLocation.user_id == user.id, LiveLocation.is_active == True)
             .values(is_active=False, last_updated_at=datetime.now(timezone.utc))
         )
-        
-        from app.modules.notifications.model import Notification
         
         await db.execute(
             update(Notification)

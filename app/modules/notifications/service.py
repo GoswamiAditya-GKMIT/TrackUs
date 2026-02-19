@@ -1,16 +1,17 @@
-"""
-Notification Service.
-"""
+import logging
 from typing import List
 import uuid
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, and_, desc
 
 from app.modules.notifications.model import Notification
-from app.modules.notifications.schema import NotificationCreate
+from app.modules.notifications.schema import NotificationCreate, NotificationResponse
 from app.common.constants import NotificationType
 from app.core.exceptions import NotFoundException
 from datetime import datetime, timezone
+from app.realtime.manager import manager
+
+logger = logging.getLogger(__name__)
 
 class NotificationService:
     
@@ -78,12 +79,6 @@ class NotificationService:
         """
         Push notification to user's WebSocket channel.
         """
-        from app.realtime.manager import manager
-        from app.modules.notifications.schema import NotificationResponse
-        import logging
-        
-        logger = logging.getLogger(__name__)
-        
         try:
             # Format payload same as REST response
             payload = NotificationResponse.model_validate(notification).model_dump(mode="json")

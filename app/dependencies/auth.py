@@ -10,10 +10,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.db.session import get_db
 from app.core.redis import get_redis
 from app.modules.users.model import User
+from app.modules.auth.blacklist_service import TokenBlacklistService
 from app.core.security import decode_access_token
-from app.core.exceptions import AuthenticationException
+from app.core.exceptions import (
+    AuthenticationException,
+    PermissionDeniedException,
+    NotFoundException
+)
 from app.common.enums import UserRole
-from app.core.exceptions import PermissionDeniedException
 
 
 # Security scheme for Swagger UI - HTTPBearer for JWT tokens
@@ -33,7 +37,6 @@ async def get_current_user(
     Get the currently authenticated user from JWT token.
     """
     from app.modules.users.service import UserService
-    from app.modules.auth.blacklist_service import TokenBlacklistService
 
     if not credentials:
         raise AuthenticationException(detail="No token provided")
@@ -64,7 +67,10 @@ async def get_current_user(
     except ValueError:
         raise AuthenticationException(detail="Invalid user ID in token")
     
-    user = await UserService.get_user(db, user_id)
+    try:
+        user = await UserService.get_user(db, user_id)
+    except NotFoundException:
+        raise PermissionDeniedException(detail="User not found or account deleted")
     
     if not user.is_active:
         raise AuthenticationException(detail="User account is inactive")

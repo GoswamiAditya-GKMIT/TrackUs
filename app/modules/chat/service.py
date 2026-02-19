@@ -89,7 +89,6 @@ class ChatService:
         Validates that the user is an active member or tenant admin.
         """
         # Permission check: Member or Tenant Admin
-        # Reuse GroupService logic pattern or direct check
         await GroupService.get_group(db, group_id, user) # Verifies tenant isolation and existence
 
         # For regular users, verify membership
@@ -190,10 +189,6 @@ class EventChatService:
         List chat messages for an event with pagination.
         Validates that the user is an ACCEPTED participant.
         """
-        from app.modules.events.service import EventService
-        from app.common.enums import ParticipantStatus
-        from app.modules.chat.model import EventMessage
-
         # Permission check: Must be ACCEPTED participant
         participant = await EventService._get_participant(db, event_id, user.id)
         if not participant or participant.status != ParticipantStatus.ACCEPTED:

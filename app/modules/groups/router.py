@@ -87,7 +87,7 @@ async def list_groups(
 
 @router.get(
     "/{group_id}",
-    response_model=SuccessResponse[dict],
+    response_model=SuccessResponse[Union[GroupDetailAdminResponse, GroupDetailResponse]],
     summary="Get group details"
 )
 async def get_group(

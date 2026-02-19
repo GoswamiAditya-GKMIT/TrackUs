@@ -22,7 +22,8 @@ from app.modules.groups.schema import (
     GroupMemberUpdate
 )
 from app.modules.users.model import User
-from app.common.enums import GroupMemberRole, UserRole
+from app.common.enums import GroupMemberRole, UserRole, ParticipantStatus
+from app.modules.events.model import TravelEvent, EventParticipant
 from app.realtime.manager import manager
 from app.core.exceptions import (
     BadRequestException,
@@ -279,7 +280,6 @@ class GroupService:
             .values(left_at=datetime.now(timezone.utc))
         )
         
-        from app.modules.events.model import TravelEvent
         await db.execute(
             update(TravelEvent)
             .where(TravelEvent.group_id == group_id, TravelEvent.deleted_at.is_(None))
@@ -287,8 +287,6 @@ class GroupService:
         )
      
         
-        from app.modules.events.model import EventParticipant
-        from app.common.enums import ParticipantStatus
         
         event_ids_query = select(TravelEvent.id).where(TravelEvent.group_id == group_id)
         event_ids_result = await db.execute(event_ids_query)
@@ -385,6 +383,7 @@ class MembershipService:
         Add a new member to the group.
         """
         # Ensure target user exists and belongs to the same tenant
+        # Inline import to prevent circular dependency with UserService
         from app.modules.users.service import UserService
         target_user = await UserService.get_user(db, member_data.user_id)
         

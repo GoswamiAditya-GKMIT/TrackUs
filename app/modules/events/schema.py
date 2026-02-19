@@ -5,7 +5,7 @@ import uuid
 from datetime import datetime
 from typing import Optional
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 from app.common.enums import EventStatus
 
@@ -16,14 +16,12 @@ class EventCreate(BaseModel):
     start_time: datetime = Field(..., description="Event start time")
     end_time: datetime = Field(..., description="Event end time")
     
-    @field_validator('end_time')
-    @classmethod
-    def validate_time_range(cls, end_time: datetime, info) -> datetime:
+    @model_validator(mode='after')
+    def validate_time_range(self) -> 'EventCreate':
         """Validate that end_time is after start_time."""
-        start_time = info.data.get('start_time')
-        if start_time and end_time <= start_time:
+        if self.end_time <= self.start_time:
             raise ValueError('End time must be after start time')
-        return end_time
+        return self
 
 
 class EventResponse(BaseModel):
