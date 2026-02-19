@@ -1,4 +1,4 @@
-# TrackUs 🚀
+# TrackUs 
 
 **TrackUs** is a modern, multi-tenant travel coordination platform backend built with FastAPI. It enables seamless trip planning, real-time coordination, and group communication for travelers and organizations.
 
@@ -7,7 +7,7 @@
 ##  Features
 
 - ** Multi-tenancy**: Robust isolation for different organizations and groups.
-- **⚡ Real-time Coordination**: Live location tracking and chat functionality via WebSockets.
+- ** Real-time Coordination**: Live location tracking and chat functionality via WebSockets.
 - ** Secure Authentication**: JWT-based authentication with role-based access control (RBAC).
 - ** Event Management**: Create, manage, and coordinate travel events and itineraries.
 - ** Real-time Chat**: Group and event-specific communication channels.
@@ -18,7 +18,7 @@
 
 ---
 
-## 🛠️ Tech Stack
+##  Tech Stack
 
 - **Framework**: [FastAPI](https://fastapi.tiangolo.com/) (Python 3.12+)
 - **Database**: [PostgreSQL](https://www.postgresql.org/) with [SQLAlchemy](https://www.sqlalchemy.org/) (Async)
