@@ -26,8 +26,7 @@ from app.common.response_utils import success_response, paginated_response
 from app.common.responses import SuccessResponse, PaginatedResponse
 from fastapi import Response
 from app.dependencies.common import PaginationParams
-
-
+from app.modules.users.tasks import send_verification_email
 
 router = APIRouter(prefix="/users", tags=["users"])
 
@@ -46,7 +45,6 @@ async def create_user(
 ):  
     user, token = await UserService.create_user(db, user_data, current_user)
     
-    from app.modules.users.tasks import send_verification_email
     background_tasks.add_task(
         send_verification_email,
         email=user.email,
